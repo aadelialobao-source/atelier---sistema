@@ -531,7 +531,8 @@ let tipo = 'ourivesaria';
 // ── INIT ──
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) { window.location.href = 'index.html'; return; }
+  if (!session) { window.location.href = 'index%202.html'
+; return; }
 
   currentUser = session.user;
 
