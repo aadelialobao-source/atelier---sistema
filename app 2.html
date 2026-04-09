@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atelier Ana Lobão — Sistema</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #C9A96E; --gold-light: #E8D5A8; --gold-dark: #8B6914;
+    --navy: #0D1B2A; --navy-mid: #162035; --navy-light: #1E2D45;
+    --cream: #F7F2EB; --text-light: #C8BAA2;
+    --success: #4CAF82; --danger: #D4635A; --warning: #E8A44A;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Jost', sans-serif; background: var(--navy); color: var(--cream); min-height: 100vh; }
+
+  /* ── LOADING ── */
+  #loading-screen {
+    position: fixed; inset: 0; background: var(--navy);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 999; transition: opacity 0.4s;
+  }
+  #loading-screen .ring {
+    width: 56px; height: 56px; border: 2px solid rgba(201,169,110,0.15);
+    border-top-color: var(--gold); border-radius: 50%;
+    animation: spin 0.9s linear infinite; margin-bottom: 16px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading-screen p { font-size: 11px; letter-spacing: 3px; color: var(--text-light); }
+
+  /* ── HEADER ── */
+  header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-mid) 100%);
+    border-bottom: 1px solid rgba(201,169,110,0.2);
+    padding: 0 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-mark {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cormorant Garamond', serif; font-size: 16px; color: var(--navy); font-weight: 600;
+  }
+  .logo-text { font-family: 'Cormorant Garamond', serif; font-size: 16px; letter-spacing: 2px; color: var(--gold); }
+  .logo-sub { font-size: 9px; letter-spacing: 3px; color: var(--text-light); }
+
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .user-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(201,169,110,0.08); border: 1px solid rgba(201,169,110,0.2);
+    border-radius: 20px; padding: 5px 12px 5px 5px;
+  }
+  .user-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--navy); font-weight: 600;
+  }
+  .user-name { font-size: 12px; color: var(--cream); }
+  .user-role { font-size: 9px; letter-spacing: 1px; color: var(--gold); }
+  .btn-logout {
+    background: transparent; border: 1px solid rgba(201,169,110,0.2);
+    border-radius: 8px; padding: 6px 12px;
+    color: var(--text-light); font-family: 'Jost'; font-size: 11px; letter-spacing: 1px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .btn-logout:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex; gap: 2px;
+    padding: 16px 28px 0;
+    border-bottom: 1px solid rgba(201,169,110,0.12);
+  }
+  .tab {
+    padding: 9px 20px;
+    border-radius: 8px 8px 0 0; border: 1px solid transparent;
+    cursor: pointer; font-family: 'Jost'; font-size: 12px; letter-spacing: 1px;
+    background: transparent; color: var(--text-light); transition: all 0.2s;
+  }
+  .tab:hover { color: var(--gold); }
+  .tab.active {
+    background: var(--navy-light); border-color: rgba(201,169,110,0.2);
+    border-bottom-color: var(--navy-light); color: var(--gold);
+  }
+  .tab.admin-only { display: none; }
+
+  /* ── MAIN ── */
+  main { padding: 28px; max-width: 1100px; margin: 0 auto; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .page-title { font-family: 'Cormorant Garamond', serif; font-size: 26px; font-weight: 300; color: var(--gold-light); margin-bottom: 4px; }
+  .page-sub { font-size: 10px; letter-spacing: 3px; color: var(--text-light); margin-bottom: 24px; }
+
+  /* ── CARDS ── */
+  .card { background: var(--navy-mid); border: 1px solid rgba(201,169,110,0.14); border-radius: var(--radius); padding: 22px; }
+  .card-title { font-size: 10px; letter-spacing: 3px; color: var(--gold); margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid rgba(201,169,110,0.12); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  /* ── FIELDS ── */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 10px; letter-spacing: 1.5px; color: var(--text-light); margin-bottom: 6px; }
+  .field input, .field select {
+    width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(201,169,110,0.18);
+    border-radius: 8px; padding: 10px 12px; color: var(--cream);
+    font-family: 'Jost'; font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--gold); }
+  .field select option { background: var(--navy-mid); }
+  .field-row { display: flex; gap: 10px; }
+  .field-row .field { flex: 1; }
+
+  /* ── TYPE TOGGLE ── */
+  .type-toggle { display: flex; border: 1px solid rgba(201,169,110,0.22); border-radius: 10px; overflow: hidden; margin-bottom: 22px; }
+  .type-btn {
+    flex: 1; padding: 12px; background: transparent; border: none; cursor: pointer;
+    font-family: 'Jost'; font-size: 12px; letter-spacing: 2px; color: var(--text-light);
+    transition: all 0.2s; text-transform: uppercase;
+  }
+  .type-btn.active { background: linear-gradient(135deg, var(--gold-dark), var(--gold)); color: var(--navy); font-weight: 600; }
+
+  /* ── BEAD TABLE ── */
+  .bead-table { width: 100%; border-collapse: collapse; }
+  .bead-table th { font-size: 10px; letter-spacing: 2px; color: var(--gold); text-align: left; padding: 7px 8px; border-bottom: 1px solid rgba(201,169,110,0.18); }
+  .bead-table td { padding: 5px 8px; }
+  .bead-table input { background: rgba(255,255,255,0.04); border: 1px solid rgba(201,169,110,0.14); border-radius: 6px; padding: 6px 8px; color: var(--cream); font-family: 'Jost'; font-size: 13px; width: 100%; outline: none; }
+  .bead-table input:focus { border-color: var(--gold); }
+  .row-total { font-size: 13px; color: var(--gold-light); font-weight: 500; text-align: right; }
+  .add-row-btn { margin-top: 10px; background: transparent; border: 1px dashed rgba(201,169,110,0.28); border-radius: 8px; color: var(--gold); font-size: 11px; letter-spacing: 1px; padding: 7px 14px; cursor: pointer; width: 100%; transition: all 0.2s; font-family: 'Jost'; }
+  .add-row-btn:hover { background: rgba(201,169,110,0.07); }
+  .remove-btn { background: transparent; border: none; color: rgba(212,99,90,0.5); cursor: pointer; font-size: 16px; transition: color 0.2s; }
+  .remove-btn:hover { color: var(--danger); }
+
+  /* ── RESULTADO ── */
+  .result-panel { background: linear-gradient(135deg, var(--navy-light) 0%, rgba(201,169,110,0.05) 100%); border: 1px solid rgba(201,169,110,0.28); border-radius: var(--radius); padding: 24px; }
+  .result-title { font-family: 'Cormorant Garamond', serif; font-size: 15px; color: var(--gold); margin-bottom: 18px; }
+  .result-line { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px; }
+  .result-line .lbl { color: var(--text-light); }
+  .result-line .val { color: var(--cream); font-weight: 500; }
+  .result-hl { background: rgba(201,169,110,0.1); border: 1px solid rgba(201,169,110,0.3); border-radius: 10px; padding: 14px 18px; margin: 14px 0; display: flex; justify-content: space-between; align-items: center; }
+  .result-hl .lbl { font-size: 11px; color: var(--gold); letter-spacing: 1px; }
+  .result-hl .val { font-family: 'Cormorant Garamond', serif; font-size: 24px; color: var(--gold-light); }
+  .result-hl.top { border-color: var(--gold); background: rgba(201,169,110,0.16); }
+  .price-levels { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-top: 14px; }
+  .price-level { background: rgba(255,255,255,0.03); border: 1px solid rgba(201,169,110,0.13); border-radius: 8px; padding: 10px; text-align: center; }
+  .price-level .lv-name { font-size: 9px; letter-spacing: 1.5px; color: var(--text-light); margin-bottom: 5px; }
+  .price-level .lv-price { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: var(--cream); }
+  .price-level.rec { border-color: var(--gold); background: rgba(201,169,110,0.09); }
+  .price-level.rec .lv-name { color: var(--gold); }
+  .price-level.rec .lv-price { color: var(--gold-light); }
+  .badge { font-size: 8px; letter-spacing: 1px; color: var(--navy); background: var(--gold); border-radius: 4px; padding: 1px 5px; margin-top: 3px; display: inline-block; }
+
+  /* ── MARKUP SLIDER ── */
+  .markup-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .markup-row label { font-size: 11px; color: var(--text-light); min-width: 100px; }
+  .markup-row input[type=range] { flex: 1; -webkit-appearance: none; height: 3px; background: linear-gradient(to right, var(--gold) 0%, var(--gold) var(--pct,45%), rgba(201,169,110,0.2) var(--pct,45%)); border-radius: 4px; outline: none; }
+  .markup-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--gold); cursor: pointer; }
+  .markup-val { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--gold-light); min-width: 34px; text-align: right; }
+
+  /* ── BTN ── */
+  .btn-primary { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--gold-dark), var(--gold)); border: none; border-radius: 10px; color: var(--navy); font-family: 'Jost'; font-size: 12px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; cursor: pointer; margin-top: 18px; transition: opacity 0.2s; }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ── HISTORY ── */
+  .history-filters { display: flex; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+  .filter-input { background: rgba(255,255,255,0.04); border: 1px solid rgba(201,169,110,0.18); border-radius: 8px; padding: 8px 12px; color: var(--cream); font-family: 'Jost'; font-size: 13px; outline: none; flex: 1; min-width: 160px; }
+  .filter-input:focus { border-color: var(--gold); }
+  .history-list { display: flex; flex-direction: column; gap: 10px; }
+  .history-item { background: var(--navy-mid); border: 1px solid rgba(201,169,110,0.11); border-radius: var(--radius); padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; transition: border-color 0.2s; }
+  .history-item:hover { border-color: rgba(201,169,110,0.28); }
+  .history-item .h-name { font-family: 'Cormorant Garamond', serif; font-size: 17px; color: var(--cream); }
+  .history-item .h-meta { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+  .history-item .h-price { font-family: 'Cormorant Garamond', serif; font-size: 21px; color: var(--gold-light); }
+  .history-item .h-min { font-size: 11px; color: var(--text-light); margin-top: 2px; text-align: right; }
+  .chip { font-size: 9px; letter-spacing: 1.5px; padding: 2px 7px; border-radius: 20px; display: inline-block; margin-right: 4px; }
+  .chip-o { background: rgba(201,169,110,0.14); color: var(--gold); }
+  .chip-b { background: rgba(76,175,130,0.14); color: var(--success); }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: var(--text-light); font-size: 13px; }
+  .empty-icon { font-size: 36px; opacity: 0.3; margin-bottom: 10px; }
+
+  /* ── ADMIN ── */
+  .users-grid { display: flex; flex-direction: column; gap: 10px; }
+  .user-row { background: var(--navy-mid); border: 1px solid rgba(201,169,110,0.11); border-radius: 10px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; }
+  .user-row .u-name { font-size: 15px; color: var(--cream); }
+  .user-row .u-email { font-size: 12px; color: var(--text-light); }
+  .user-row .u-role { font-size: 10px; letter-spacing: 1px; padding: 3px 10px; border-radius: 20px; }
+  .role-admin { background: rgba(201,169,110,0.15); color: var(--gold); }
+  .role-func { background: rgba(76,175,130,0.12); color: var(--success); }
+  .btn-del { background: transparent; border: 1px solid rgba(212,99,90,0.25); border-radius: 7px; color: rgba(212,99,90,0.6); font-size: 11px; padding: 5px 10px; cursor: pointer; font-family: 'Jost'; transition: all 0.2s; }
+  .btn-del:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ── PARAMS ── */
+  .params-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+  .param-card { background: var(--navy-mid); border: 1px solid rgba(201,169,110,0.11); border-radius: 10px; padding: 16px; }
+  .param-card label { font-size: 10px; letter-spacing: 2px; color: var(--gold); display: block; margin-bottom: 7px; }
+  .param-card input { background: rgba(255,255,255,0.04); border: 1px solid rgba(201,169,110,0.18); border-radius: 6px; padding: 8px 10px; color: var(--cream); font-family: 'Jost'; font-size: 15px; width: 100%; outline: none; }
+  .param-card input:focus { border-color: var(--gold); }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--navy-mid); border: 1px solid rgba(201,169,110,0.3); border-radius: 10px; padding: 14px 20px; font-size: 13px; color: var(--cream); z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: rgba(76,175,130,0.4); }
+  .toast.error { border-color: rgba(212,99,90,0.4); color: #e8857e; }
+
+  .hdr-rates { display: flex; gap: 12px; }
+  .rate-chip { background: rgba(201,169,110,0.08); border: 1px solid rgba(201,169,110,0.2); border-radius: 8px; padding: 4px 10px; font-size: 11px; color: var(--text-light); display: flex; align-items: center; gap: 6px; }
+  .rate-chip span { color: var(--gold-light); font-family: 'Cormorant Garamond', serif; font-size: 15px; }
+
+  @media (max-width: 768px) {
+    main { padding: 16px; }
+    .tabs { padding: 10px 16px 0; overflow-x: auto; }
+    .grid-2, .params-grid { grid-template-columns: 1fr; }
+    .price-levels { grid-template-columns: repeat(2,1fr); }
+    .hdr-rates { display: none; }
+    header { padding: 0 16px; }
+  }
+
+  .inline-pct { background: transparent; border: none; border-bottom: 1px solid rgba(201,169,110,0.28); color: var(--cream); font-family: 'Jost'; font-size: 13px; width: 52px; text-align: right; outline: none; }
+</style>
+</head>
+<body>
+
+<div id="loading-screen">
+  <div class="ring"></div>
+  <p>CARREGANDO</p>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">A</div>
+    <div>
+      <div class="logo-text">ANA LOBÃO</div>
+      <div class="logo-sub">SISTEMA DE PRECIFICAÇÃO</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="hdr-rates">
+      <div class="rate-chip">USD/BRL <span id="hdr-dolar-val">5,22</span></div>
+      <div class="rate-chip">Au 18k/g <span id="hdr-au18-val">—</span></div>
+    </div>
+    <div class="user-chip">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <div>
+        <div class="user-name" id="user-name">—</div>
+        <div class="user-role" id="user-role">—</div>
+      </div>
+    </div>
+    <button class="btn-logout" onclick="logout()">SAIR</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="openTab('nova',this)">✦ Nova Ficha</button>
+  <button class="tab" onclick="openTab('historico',this)">◈ Histórico</button>
+  <button class="tab" onclick="openTab('params',this)">⊹ Parâmetros</button>
+  <button class="tab admin-only" id="tab-admin-btn" onclick="openTab('admin',this)">⚙ Usuários</button>
+</div>
+
+<main>
+
+<!-- ════ NOVA FICHA ════ -->
+<div id="tab-nova" class="tab-content active">
+  <p class="page-title">Ficha de Custo</p>
+  <p class="page-sub">NOVA PRECIFICAÇÃO</p>
+
+  <div class="type-toggle">
+    <button class="type-btn active" id="btn-ourivesaria" onclick="setTipo('ourivesaria')">⚒ Ourivesaria / Bancada</button>
+    <button class="type-btn" id="btn-beads" onclick="setTipo('beads')">◎ Montagem / Beads</button>
+  </div>
+
+  <div class="grid-2">
+    <!-- ESQUERDA -->
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <p class="card-title">IDENTIFICAÇÃO</p>
+        <div class="field-row">
+          <div class="field">
+            <label>NOME DA JOIA</label>
+            <input type="text" id="nome" placeholder="ex: Escapulário Traços Eternos">
+          </div>
+          <div class="field" style="flex:0 0 120px;">
+            <label>CÓDIGO</label>
+            <input type="text" id="codigo" placeholder="ES.TE.001">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>CATEGORIA</label>
+            <select id="categoria">
+              <option>Escapulário / Colar</option>
+              <option>Pingente</option>
+              <option>Anel</option>
+              <option>Brinco</option>
+              <option>Pulseira</option>
+              <option>Ear Cuff / Ear Climber</option>
+              <option>Conjunto</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>NÍVEL DE DESEJO</label>
+            <select id="nivel">
+              <option value="2.75">Comercial / Giro</option>
+              <option value="3.25" selected>Desejo Médio</option>
+              <option value="3.75">Hero / Forte Desejo</option>
+              <option value="4.5">Peça Especial / Cápsula</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- OURIVESARIA -->
+      <div id="bloco-ourivesaria">
+        <div class="card" style="margin-bottom:14px;">
+          <p class="card-title">BLOCO 1 — PRODUÇÃO (OURIVESARIA)</p>
+          <div class="field-row">
+            <div class="field"><label>PESO DO OURO (g)</label><input type="number" id="peso-ouro" value="3" step="0.01" oninput="calcular()"></div>
+            <div class="field"><label>LIGA</label><select id="liga-ouro" onchange="calcular()"><option value="0.75">18k (75%)</option><option value="0.58">14k (58%)</option><option value="1.00">24k (100%)</option></select></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>MÃO DE OBRA R$/g</label><input type="number" id="mao-obra" value="120" step="1" oninput="calcular()"></div>
+            <div class="field"><label>PERDA FUNDIÇÃO (%)</label><input type="number" id="perda" value="10" step="0.5" oninput="calcular()"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>CORRENTE OURO (R$)</label><input type="number" id="corrente-ouro" value="0" step="1" oninput="calcular()"></div>
+            <div class="field"><label>PEDRAS / PRECIOSAS (R$)</label><input type="number" id="pedras" value="0" step="1" oninput="calcular()"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>OUTROS INSUMOS (R$)</label><input type="number" id="outros-insumos" value="30" step="1" oninput="calcular()"></div>
+            <div class="field"><label>GRAVAÇÃO / PERSONALIZAÇÃO (R$)</label><input type="number" id="gravacao" value="0" step="1" oninput="calcular()"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BEADS -->
+      <div id="bloco-beads" style="display:none;">
+        <div class="card" style="margin-bottom:14px;">
+          <p class="card-title">BLOCO 1 — MATERIAIS (BEADS)</p>
+          <table class="bead-table">
+            <thead><tr><th>Material</th><th>Qtd</th><th>R$ unit</th><th>Total</th><th></th></tr></thead>
+            <tbody id="beads-tbody">
+              <tr>
+                <td><input type="text" placeholder="ex: Pedras olho de tigre" onchange="calcBeads()"></td>
+                <td><input type="number" value="1" min="0" step="0.5" style="width:55px" oninput="calcBeads()"></td>
+                <td><input type="number" value="0" min="0" step="0.5" style="width:70px" oninput="calcBeads()"></td>
+                <td class="row-total">R$ 0,00</td>
+                <td><button class="remove-btn" onclick="removeBeadRow(this)">×</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <button class="add-row-btn" onclick="addBeadRow()">+ Adicionar material</button>
+          <div class="field-row" style="margin-top:14px;">
+            <div class="field"><label>FIO / ELÁSTICO (R$)</label><input type="number" id="fio" value="5" step="0.5" oninput="calcular()"></div>
+            <div class="field"><label>FECHO / FIVELA (R$)</label><input type="number" id="fecho" value="10" step="0.5" oninput="calcular()"></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label>MÃO DE OBRA MONTAGEM (R$)</label><input type="number" id="mao-beads" value="30" step="5" oninput="calcular()"></div>
+            <div class="field"><label>OUTROS INSUMOS (R$)</label><input type="number" id="outros-beads" value="10" step="1" oninput="calcular()"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EMBALAGEM -->
+      <div class="card">
+        <p class="card-title">BLOCO 2 — EXPERIÊNCIA & EMBALAGEM</p>
+        <div class="field-row">
+          <div class="field"><label>EMBALAGEM / CAIXA (R$)</label><input type="number" id="embalagem" value="70" step="1" oninput="calcular()"></div>
+          <div class="field"><label>LAÇO VELUDO (R$)</label><input type="number" id="laco-veludo" value="6.50" step="0.5" oninput="calcular()"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>SACOLA AZUL IMPORTADA (R$)</label><input type="number" id="sacola-azul" value="36" step="1" oninput="calcular()"></div>
+          <div class="field"><label>FLANELA (R$)</label><input type="number" id="flanela" value="8" step="0.5" oninput="calcular()"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>CERTIFICADO LAB (R$)</label><input type="number" id="certificado" value="0" step="1" oninput="calcular()"></div>
+          <div class="field"><label>TAG / ADESIVO (R$)</label><input type="number" id="tag" value="5" step="0.5" oninput="calcular()"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DIREITA -->
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <p class="card-title">BLOCO 3 — FORMAÇÃO DE PREÇO</p>
+        <div class="markup-row">
+          <label>Markup base</label>
+          <input type="range" id="markup-base" min="1" max="6" step="0.05" value="3.25"
+            oninput="updateMarkupVal(); calcular()">
+          <span class="markup-val" id="mv-base">3,25</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.03);border-radius:8px;padding:12px;margin-bottom:14px;">
+          <div class="result-line"><span class="lbl">% Marketing</span><span><input class="inline-pct" type="number" id="pct-mkt" value="5" step="0.5" oninput="calcular()">%</span></div>
+          <div class="result-line"><span class="lbl">Comissão</span><span><input class="inline-pct" type="number" id="pct-comissao" value="14" step="0.5" oninput="calcular()">%</span></div>
+          <div class="result-line"><span class="lbl">Cashback</span><span><input class="inline-pct" type="number" id="pct-cashback" value="5" step="0.5" oninput="calcular()">%</span></div>
+          <div class="result-line"><span class="lbl">Tributos</span><span><input class="inline-pct" type="number" id="pct-tributos" value="5.8" step="0.5" oninput="calcular()">%</span></div>
+          <div class="result-line"><span class="lbl">Margem líquida alvo</span><span><input class="inline-pct" type="number" id="pct-margem" value="20" step="0.5" oninput="calcular()">%</span></div>
+          <div class="result-line" style="margin-top:6px;"><span class="lbl">→ Despesas variáveis</span><span id="res-despesas" style="color:var(--gold-light);font-size:13px;font-weight:500;">—</span></div>
+        </div>
+        <div class="field"><label>DESCONTO MÁXIMO (%)</label><input type="number" id="desconto-max" value="5" step="0.5" oninput="calcular()"></div>
+      </div>
+
+      <div class="result-panel">
+        <p class="result-title">◈ Resultado</p>
+        <div class="result-line"><span class="lbl">Subtotal produção</span><span class="val" id="res-producao">—</span></div>
+        <div class="result-line"><span class="lbl">Subtotal experiência</span><span class="val" id="res-experiencia">—</span></div>
+        <div class="result-line"><span class="lbl">Custo total</span><span class="val" id="res-custo-total">—</span></div>
+        <div class="result-line"><span class="lbl">Preço de equilíbrio</span><span class="val" id="res-equilibrio">—</span></div>
+
+        <div class="result-hl">
+          <div><p class="lbl">PREÇO MÍNIMO VIÁVEL</p><p style="font-size:10px;color:var(--text-light);margin-top:2px;">Nunca venda abaixo</p></div>
+          <span class="val" id="res-minimo">—</span>
+        </div>
+        <div class="result-hl top">
+          <div><p class="lbl" style="font-size:13px;">✦ VENDA APROVADA</p><p style="font-size:10px;color:var(--text-light);margin-top:2px;">Preço ideal sugerido</p></div>
+          <span class="val" id="res-ideal">—</span>
+        </div>
+
+        <p style="font-size:10px;letter-spacing:2px;color:var(--gold);margin:14px 0 8px;">TABELA POR NÍVEL</p>
+        <div class="price-levels">
+          <div class="price-level"><p class="lv-name">COMERCIAL</p><p class="lv-price" id="lv-comercial">—</p></div>
+          <div class="price-level"><p class="lv-name">DESEJO MÉDIO</p><p class="lv-price" id="lv-medio">—</p></div>
+          <div class="price-level rec"><p class="lv-name">HERO</p><p class="lv-price" id="lv-hero">—</p><span class="badge">RECOM.</span></div>
+          <div class="price-level"><p class="lv-name">CÁPSULA</p><p class="lv-price" id="lv-capsula">—</p></div>
+        </div>
+
+        <div class="result-line" style="margin-top:12px;"><span class="lbl">À vista (–<span id="lbl-desc">5</span>%)</span><span class="val" id="res-avista">—</span></div>
+        <div class="result-line"><span class="lbl">Lucro líquido estimado</span><span class="val" id="res-lucro" style="color:var(--success);">—</span></div>
+        <div class="result-line"><span class="lbl">Margem líquida %</span><span class="val" id="res-margem-pct">—</span></div>
+
+        <button class="btn-primary" id="btn-salvar" onclick="salvarFicha()">SALVAR FICHA</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ HISTÓRICO ════ -->
+<div id="tab-historico" class="tab-content">
+  <p class="page-title">Histórico de Peças</p>
+  <p class="page-sub">FICHAS SALVAS</p>
+  <div class="history-filters">
+    <input class="filter-input" type="text" id="filtro-busca" placeholder="Buscar por nome ou código..." oninput="filtrarHistorico()">
+    <select class="filter-input" id="filtro-tipo" onchange="filtrarHistorico()" style="max-width:160px;">
+      <option value="">Todos os tipos</option>
+      <option value="ourivesaria">Ourivesaria</option>
+      <option value="beads">Beads</option>
+    </select>
+  </div>
+  <div class="history-list" id="history-list">
+    <div class="empty-state"><div class="empty-icon">◇</div><p>Carregando fichas...</p></div>
+  </div>
+</div>
+
+<!-- ════ PARÂMETROS ════ -->
+<div id="tab-params" class="tab-content">
+  <p class="page-title">Parâmetros Globais</p>
+  <p class="page-sub">VALORES DE REFERÊNCIA DO MERCADO</p>
+  <div class="params-grid">
+    <div class="param-card"><label>DÓLAR (USD/BRL)</label><input type="number" id="p-dolar" value="5.22" step="0.01" oninput="syncParams()"></div>
+    <div class="param-card"><label>OURO 24K (R$/g)</label><input type="number" id="p-ouro24" value="775.38" step="0.5" oninput="syncParams()"></div>
+    <div class="param-card"><label>COMISSÃO 18K (%)</label><input type="number" id="p-com18" value="75" step="0.5"></div>
+    <div class="param-card"><label>MÃO DE OBRA PADRÃO (R$/g)</label><input type="number" id="p-mao" value="120" step="5" oninput="document.getElementById('mao-obra').value=this.value;calcular()"></div>
+    <div class="param-card"><label>PERDA FUNDIÇÃO PADRÃO (%)</label><input type="number" id="p-perda" value="10" step="0.5" oninput="document.getElementById('perda').value=this.value;calcular()"></div>
+    <div class="param-card"><label>TRIBUTOS PADRÃO (%)</label><input type="number" id="p-trib" value="5.8" step="0.5" oninput="document.getElementById('pct-tributos').value=this.value;calcular()"></div>
+  </div>
+  <div class="card">
+    <p class="card-title">OURO 18K — PREÇO CALCULADO</p>
+    <div style="display:flex;gap:32px;padding:10px 0;">
+      <div>
+        <p style="font-size:10px;color:var(--text-light);margin-bottom:4px;">Au 18k sem perda</p>
+        <p style="font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--cream);" id="au18k-sem">—</p>
+      </div>
+      <div>
+        <p style="font-size:10px;color:var(--text-light);margin-bottom:4px;">Au 18k com perda (10%)</p>
+        <p style="font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--gold-light);" id="au18k-com">—</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════ ADMIN ════ -->
+<div id="tab-admin" class="tab-content">
+  <p class="page-title">Gerenciar Usuários</p>
+  <p class="page-sub">APENAS ADMINISTRADORES</p>
+  <div class="grid-2" style="margin-bottom:24px;">
+    <div class="card">
+      <p class="card-title">CONVIDAR FUNCIONÁRIO</p>
+      <div class="field"><label>NOME COMPLETO</label><input type="text" id="new-nome" placeholder="Nome do funcionário"></div>
+      <div class="field"><label>E-MAIL</label><input type="email" id="new-email" placeholder="funcionario@email.com"></div>
+      <div class="field"><label>SENHA INICIAL</label><input type="password" id="new-senha" placeholder="Mínimo 6 caracteres"></div>
+      <div class="field">
+        <label>FUNÇÃO</label>
+        <select id="new-role">
+          <option value="funcionario">Funcionário</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <button class="btn-primary" onclick="criarUsuario()">CRIAR ACESSO</button>
+    </div>
+    <div>
+      <div class="card">
+        <p class="card-title">USUÁRIOS CADASTRADOS</p>
+        <div class="users-grid" id="users-grid">
+          <div class="empty-state"><p>Carregando...</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script>
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+let allFichas = [];
+let tipo = 'ourivesaria';
+
+// ── INIT ──
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) { window.location.href = 'index.html'; return; }
+
+  currentUser = session.user;
+
+  // busca perfil
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+  currentProfile = profile;
+
+  // UI de usuário
+  const nome = profile?.nome || currentUser.email;
+  document.getElementById('user-name').textContent = nome;
+  document.getElementById('user-avatar').textContent = nome.charAt(0).toUpperCase();
+  document.getElementById('user-role').textContent = profile?.role === 'admin' ? 'ADMIN' : 'FUNCIONÁRIO';
+
+  // mostrar tab admin se admin
+  if (profile?.role === 'admin') {
+    document.getElementById('tab-admin-btn').style.display = '';
+    carregarUsuarios();
+  }
+
+  // carrega dados
+  await carregarParams();
+  await carregarHistorico();
+  calcular();
+
+  // esconde loading
+  const ls = document.getElementById('loading-screen');
+  ls.style.opacity = '0';
+  setTimeout(() => ls.style.display = 'none', 400);
+}
+
+// ── AUTH ──
+async function logout() {
+  await sb.auth.signOut();
+  window.location.href = 'index.html';
+}
+
+// ── TABS ──
+function openTab(name, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  el.classList.add('active');
+  if (name === 'historico') carregarHistorico();
+  if (name === 'admin') carregarUsuarios();
+}
+
+// ── TIPO ──
+function setTipo(t) {
+  tipo = t;
+  document.getElementById('btn-ourivesaria').classList.toggle('active', t === 'ourivesaria');
+  document.getElementById('btn-beads').classList.toggle('active', t === 'beads');
+  document.getElementById('bloco-ourivesaria').style.display = t === 'ourivesaria' ? '' : 'none';
+  document.getElementById('bloco-beads').style.display = t === 'beads' ? '' : 'none';
+  calcular();
+}
+
+// ── BEADS ──
+function addBeadRow() {
+  const tbody = document.getElementById('beads-tbody');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" placeholder="Material" onchange="calcBeads()"></td>
+    <td><input type="number" value="1" min="0" step="0.5" style="width:55px" oninput="calcBeads()"></td>
+    <td><input type="number" value="0" min="0" step="0.5" style="width:70px" oninput="calcBeads()"></td>
+    <td class="row-total">R$ 0,00</td>
+    <td><button class="remove-btn" onclick="removeBeadRow(this)">×</button></td>
+  `;
+  tbody.appendChild(tr);
+}
+function removeBeadRow(btn) { btn.closest('tr').remove(); calcBeads(); }
+function calcBeads() {
+  document.querySelectorAll('#beads-tbody tr').forEach(row => {
+    const q = parseFloat(row.cells[1].querySelector('input').value) || 0;
+    const u = parseFloat(row.cells[2].querySelector('input').value) || 0;
+    row.querySelector('.row-total').textContent = fmt(q * u);
+  });
+  calcular();
+}
+function getBeadsTotal() {
+  let t = 0;
+  document.querySelectorAll('#beads-tbody tr').forEach(row => {
+    t += (parseFloat(row.cells[1].querySelector('input').value)||0) * (parseFloat(row.cells[2].querySelector('input').value)||0);
+  });
+  return t + v('fio') + v('fecho') + v('mao-beads') + v('outros-beads');
+}
+
+// ── HELPERS ──
+function v(id) { return parseFloat(document.getElementById(id)?.value) || 0; }
+function fmt(n) { return 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function set(id, val) { const el = document.getElementById(id); if(el) el.textContent = val; }
+
+function updateMarkupVal() {
+  const val = v('markup-base');
+  document.getElementById('mv-base').textContent = val.toFixed(2).replace('.',',');
+  const pct = ((val - 1) / 5 * 100) + '%';
+  document.getElementById('markup-base').style.setProperty('--pct', pct);
+}
+updateMarkupVal();
+
+function syncParams() {
+  const ouro24 = v('p-ouro24');
+  const au18 = ouro24 * 0.75;
+  const au18p = au18 * 1.1;
+  set('au18k-sem', fmt(au18) + '/g');
+  set('au18k-com', fmt(au18p) + '/g');
+  set('hdr-dolar-val', v('p-dolar').toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2}));
+  set('hdr-au18-val', fmt(au18p).replace('R$ ',''));
+  calcular();
+}
+
+// ── CALCULAR ──
+function calcular() {
+  const ouro24 = v('p-ouro24') || 775.38;
+  const liga = v('liga-ouro') || 0.75;
+  const perda = (v('perda') || 10) / 100;
+  const au18k_perda = ouro24 * liga * (1 + perda);
+
+  let subProd = 0;
+  if (tipo === 'ourivesaria') {
+    const peso = v('peso-ouro');
+    subProd = peso * au18k_perda + peso * v('mao-obra') + v('corrente-ouro') + v('pedras') + v('outros-insumos') + v('gravacao');
+  } else {
+    subProd = getBeadsTotal();
+  }
+
+  const emb = v('embalagem') + v('laco-veludo') + v('sacola-azul') + v('flanela') + v('certificado') + v('tag');
+  const custo = subProd + emb;
+
+  const mkt = v('pct-mkt')/100, com = v('pct-comissao')/100, cb = v('pct-cashback')/100;
+  const trib = v('pct-tributos')/100, mar = v('pct-margem')/100;
+  const desp = mkt + com + cb + trib + mar;
+  const despSem = mkt + com + cb + trib;
+
+  const markup = v('markup-base') || 3.25;
+  const desc = v('desconto-max')/100;
+
+  const equilibrio = custo / (1 - despSem);
+  const minimo = custo / (1 - desp);
+  const ideal = custo * markup;
+  const avista = ideal * (1 - desc);
+  const lucro = ideal * mar;
+  const marPct = ideal > 0 ? (lucro / ideal * 100) : 0;
+
+  set('res-producao', fmt(subProd));
+  set('res-experiencia', fmt(emb));
+  set('res-custo-total', fmt(custo));
+  set('res-equilibrio', fmt(equilibrio));
+  set('res-minimo', fmt(minimo));
+  set('res-ideal', fmt(ideal));
+  set('res-avista', fmt(avista));
+  set('res-lucro', fmt(lucro));
+  set('res-margem-pct', marPct.toFixed(1) + '%');
+  set('res-despesas', (desp * 100).toFixed(1) + '%');
+  set('lbl-desc', v('desconto-max'));
+  set('lv-comercial', fmt(custo * 2.75));
+  set('lv-medio', fmt(custo * 3.25));
+  set('lv-hero', fmt(custo * 3.75));
+  set('lv-capsula', fmt(custo * 4.5));
+
+  syncParams();
+}
+
+// ── PARAMS DO BANCO ──
+async function carregarParams() {
+  const { data } = await sb.from('parametros').select('*').eq('id', 1).single();
+  if (data) {
+    document.getElementById('p-dolar').value = data.dolar || 5.22;
+    document.getElementById('p-ouro24').value = data.ouro24 || 775.38;
+    document.getElementById('p-mao').value = data.mao_obra || 120;
+    document.getElementById('p-perda').value = data.perda || 10;
+    document.getElementById('p-trib').value = data.tributos || 5.8;
+    document.getElementById('mao-obra').value = data.mao_obra || 120;
+    document.getElementById('perda').value = data.perda || 10;
+    document.getElementById('pct-tributos').value = data.tributos || 5.8;
+    syncParams();
+  }
+}
+
+// ── SALVAR FICHA ──
+async function salvarFicha() {
+  const nome = document.getElementById('nome').value.trim();
+  if (!nome) { showToast('Informe o nome da joia.', 'error'); return; }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = 'SALVANDO...';
+
+  const ficha = {
+    nome,
+    codigo: document.getElementById('codigo').value,
+    categoria: document.getElementById('categoria').value,
+    nivel: document.getElementById('nivel').options[document.getElementById('nivel').selectedIndex].text,
+    tipo,
+    preco_minimo: parseFmt(document.getElementById('res-minimo').textContent),
+    preco_ideal: parseFmt(document.getElementById('res-ideal').textContent),
+    preco_avista: parseFmt(document.getElementById('res-avista').textContent),
+    lucro_estimado: parseFmt(document.getElementById('res-lucro').textContent),
+    margem_pct: document.getElementById('res-margem-pct').textContent,
+    custo_total: parseFmt(document.getElementById('res-custo-total').textContent),
+    criado_por: currentUser.id,
+    criado_por_nome: currentProfile?.nome || currentUser.email,
+  };
+
+  const { error } = await sb.from('fichas').insert(ficha);
+
+  btn.disabled = false; btn.textContent = 'SALVAR FICHA';
+
+  if (error) { showToast('Erro ao salvar: ' + error.message, 'error'); }
+  else { showToast('✦ Ficha salva com sucesso!', 'success'); limparForm(); }
+}
+
+function parseFmt(str) {
+  return parseFloat(str.replace('R$ ','').replace(/\./g,'').replace(',','.')) || 0;
+}
+
+function limparForm() {
+  document.getElementById('nome').value = '';
+  document.getElementById('codigo').value = '';
+  calcular();
+}
+
+// ── HISTÓRICO ──
+async function carregarHistorico() {
+  const { data, error } = await sb.from('fichas').select('*').order('created_at', { ascending: false });
+  allFichas = data || [];
+  filtrarHistorico();
+}
+
+function filtrarHistorico() {
+  const busca = document.getElementById('filtro-busca').value.toLowerCase();
+  const tipo = document.getElementById('filtro-tipo').value;
+  const list = document.getElementById('history-list');
+
+  let fichas = allFichas.filter(f => {
+    const matchBusca = !busca || f.nome?.toLowerCase().includes(busca) || f.codigo?.toLowerCase().includes(busca);
+    const matchTipo = !tipo || f.tipo === tipo;
+    return matchBusca && matchTipo;
+  });
+
+  if (!fichas.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">◇</div><p>Nenhuma ficha encontrada.</p></div>`;
+    return;
+  }
+
+  const isAdmin = currentProfile?.role === 'admin';
+
+  list.innerHTML = fichas.map(f => `
+    <div class="history-item">
+      <div>
+        <p class="h-name">${f.nome}</p>
+        <p class="h-meta">
+          <span class="chip ${f.tipo === 'ourivesaria' ? 'chip-o' : 'chip-b'}">${f.tipo === 'ourivesaria' ? 'OURIVESARIA' : 'BEADS'}</span>
+          ${f.categoria || ''} · ${f.codigo || '—'} · ${f.nivel || ''}<br>
+          <span style="opacity:0.6">por ${f.criado_por_nome || '—'} · ${new Date(f.created_at).toLocaleDateString('pt-BR')}</span>
+        </p>
+      </div>
+      <div style="text-align:right;">
+        <p class="h-price">${fmt(f.preco_ideal)}</p>
+        <p class="h-min">Mín: ${fmt(f.preco_minimo)} · Margem: ${f.margem_pct}</p>
+        ${isAdmin ? `<button class="btn-del" onclick="deletarFicha('${f.id}')">remover</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deletarFicha(id) {
+  if (!confirm('Remover esta ficha?')) return;
+  await sb.from('fichas').delete().eq('id', id);
+  showToast('Ficha removida.', 'success');
+  await carregarHistorico();
+}
+
+// ── ADMIN: USUÁRIOS ──
+async function carregarUsuarios() {
+  const { data } = await sb.from('profiles').select('*').order('created_at');
+  const grid = document.getElementById('users-grid');
+  if (!data?.length) { grid.innerHTML = '<div class="empty-state"><p>Nenhum usuário.</p></div>'; return; }
+
+  grid.innerHTML = data.map(u => `
+    <div class="user-row">
+      <div>
+        <p class="u-name">${u.nome || '—'}</p>
+        <p class="u-email">${u.email || ''}</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="u-role ${u.role === 'admin' ? 'role-admin' : 'role-func'}">${u.role === 'admin' ? 'ADMIN' : 'FUNCIONÁRIO'}</span>
+        ${u.id !== currentUser.id ? `<button class="btn-del" onclick="removerUsuario('${u.id}')">remover</button>` : '<span style="font-size:11px;color:var(--text-light);">você</span>'}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function criarUsuario() {
+  const nome = document.getElementById('new-nome').value.trim();
+  const email = document.getElementById('new-email').value.trim();
+  const senha = document.getElementById('new-senha').value;
+  const role = document.getElementById('new-role').value;
+
+  if (!nome || !email || !senha) { showToast('Preencha todos os campos.', 'error'); return; }
+  if (senha.length < 6) { showToast('Senha deve ter ao menos 6 caracteres.', 'error'); return; }
+
+  // Cria via Supabase Admin API — requer service_role key no backend
+  // Como estamos no frontend, usamos signup normal e depois atualizamos o perfil
+  const { data, error } = await sb.auth.signUp({ email, password: senha });
+  if (error) { showToast('Erro: ' + error.message, 'error'); return; }
+
+  // Insere perfil
+  await sb.from('profiles').upsert({ id: data.user.id, nome, email, role });
+
+  showToast(`✦ Acesso criado para ${nome}.`, 'success');
+  document.getElementById('new-nome').value = '';
+  document.getElementById('new-email').value = '';
+  document.getElementById('new-senha').value = '';
+  carregarUsuarios();
+}
+
+async function removerUsuario(id) {
+  if (!confirm('Remover acesso deste usuário?')) return;
+  await sb.from('profiles').delete().eq('id', id);
+  showToast('Usuário removido.', 'success');
+  carregarUsuarios();
+}
+
+// ── TOAST ──
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── START ──
+init();
+</script>
+</body>
+</html>
