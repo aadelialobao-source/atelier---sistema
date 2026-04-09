@@ -530,36 +530,30 @@ let tipo = 'ourivesaria';
 
 // ── INIT ──
 async function init() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { window.location.href = 'index.html'; return; }
-
-  currentUser = session.user;
-
-  // busca perfil
-  const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
-  currentProfile = profile;
-
-  // UI de usuário
-  const nome = profile?.nome || currentUser.email;
-  document.getElementById('user-name').textContent = nome;
-  document.getElementById('user-avatar').textContent = nome.charAt(0).toUpperCase();
-  document.getElementById('user-role').textContent = profile?.role === 'admin' ? 'ADMIN' : 'FUNCIONÁRIO';
-
-  // mostrar tab admin se admin
-  if (profile?.role === 'admin') {
-    document.getElementById('tab-admin-btn').style.display = '';
-    carregarUsuarios();
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { window.location.href = 'index.html'; return; }
+    currentUser = session.user;
+    const { data: profiles } = await sb.from('profiles').select('*').eq('id', currentUser.id);
+    currentProfile = (profiles && profiles.length > 0) ? profiles[0] : null;
+    const nome = currentProfile?.nome || currentUser.email || 'Usuário';
+    document.getElementById('user-name').textContent = nome;
+    document.getElementById('user-avatar').textContent = nome.charAt(0).toUpperCase();
+    document.getElementById('user-role').textContent = currentProfile?.role === 'admin' ? 'ADMIN' : 'FUNCIONÁRIO';
+    if (currentProfile?.role === 'admin') {
+      document.getElementById('tab-admin-btn').style.display = '';
+      carregarUsuarios();
+    }
+    await carregarParams();
+    await carregarHistorico();
+    calcular();
+  } catch(e) {
+    console.error('Erro:', e);
+  } finally {
+    const ls = document.getElementById('loading-screen');
+    ls.style.opacity = '0';
+    setTimeout(() => ls.style.display = 'none', 400);
   }
-
-  // carrega dados
-  await carregarParams();
-  await carregarHistorico();
-  calcular();
-
-  // esconde loading
-  const ls = document.getElementById('loading-screen');
-  ls.style.opacity = '0';
-  setTimeout(() => ls.style.display = 'none', 400);
 }
 
 // ── AUTH ──
