@@ -1843,6 +1843,31 @@ function renderDashboard(c){
   });
   const osSemQC=[...new Set(etapasConcluSemQC.map(e=>e.os_id))];
 
+    // ── Alertas de datas estratégicas ───────────────────────────────
+  const hoje_d = new Date();
+  const alertasDatas = (DB.datas_importantes||[]).filter(d=>{
+    if(!d.data||!d.alerta_dias) return false;
+    const anoBase = hoje_d.getFullYear();
+    const mmdd = d.data.substring(5,10);
+    let dataRef = new Date(anoBase+'-'+mmdd);
+    if(d.recorrente!==false && dataRef < hoje_d) dataRef = new Date((anoBase+1)+'-'+mmdd);
+    const diff = Math.floor((dataRef-hoje_d)/(1000*60*60*24));
+    return diff>=0 && diff<=d.alerta_dias;
+  });
+  alertasDatas.forEach(d=>{
+    const cl=DB.clientes.find(c=>c.id==d.cliente_id)||{};
+    const anoBase = hoje_d.getFullYear();
+    const mmdd = d.data.substring(5,10);
+    let dataRef = new Date(anoBase+'-'+mmdd);
+    if(d.recorrente!==false && dataRef < hoje_d) dataRef = new Date((anoBase+1)+'-'+mmdd);
+    const diff = Math.floor((dataRef-hoje_d)/(1000*60*60*24));
+    const tipo = DATA_TIPO_LABEL[d.tipo]||d.tipo;
+    alertaHTML += '<div class="alert-item alerta-ouro" onclick="abrirPerfilCliente('+d.cliente_id+')" style="cursor:pointer">'
+      +'<span>📅 <strong>'+esc(cl.apelido||cl.nome||'—')+'</strong> — '+tipo
+      +(d.nome_assoc?' ('+esc(d.nome_assoc)+')':'')
+      +' em '+diff+' dia(s) · '+fmtDate(d.data)+'</span></div>';
+  });
+
   // ── Alertas proativos 2f ─────────────────────────────────────────
   // OS com prazo vencido (status != concluido/entregue/cancelado)
   const osVencidas=DB.os.filter(o=>{
@@ -2049,7 +2074,21 @@ const CL_OCAS_LABEL={presente:'Presente',datas_especiais:'Datas especiais',conqu
 const CL_PERFIL_LABEL={objetiva:'Objetiva',indecisa:'Indecisa',detalhista:'Detalhista',emocional:'Emocional'};
 const CL_TEMPO_LABEL={rapido:'Rápido',medio:'Médio',lento:'Lento'};
 const CL_SENS_LABEL={baixa:'Baixa',media:'Média',alta:'Alta'};
-const DATA_TIPO_LABEL={aniversario:'Aniversário',casamento:'Casamento',filho:'Filho(a)',outro:'Outro'};
+const DATA_TIPO_LABEL={
+  aniversario:       'Aniversário',
+  aniversario_filho: 'Aniversário de Filho(a)',
+  aniversario_marido:'Aniversário do Marido/Parceiro',
+  casamento:         'Casamento / Noivado',
+  formatura:         'Formatura',
+  dia_maes:          'Dia das Mães',
+  dia_namorados:     'Dia dos Namorados / Valentines',
+  natal:             'Natal',
+  conquista:         'Conquista Pessoal / Profissional',
+  viagem:            'Viagem / Intercâmbio',
+  reuniao_anual:     'Reunião / Evento Anual',
+  retorno_previsto:  'Retorno Previsto para Compra',
+  outro:             'Outro'
+};
 
 function clArr(v){return Array.isArray(v)?v:(v?[v]:[]);}
 function clChips(arr,map){return clArr(arr).map(k=>`<span class="badge badge-gold" style="margin:2px">${map[k]||k}</span>`).join('')||'—';}
@@ -2616,11 +2655,13 @@ function verCliente(id){
 function renderDatasList(clienteId){
   const datas=(DB.datas_importantes||[]).filter(d=>d.cliente_id==clienteId);
   if(!datas.length)return`<div class="empty-state" style="padding:24px"><div class="empty-state-icon">📅</div><p>Nenhuma data cadastrada. Adicione aniversários, datas de filhos e eventos importantes.</p></div>`;
-  return`<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Nome Associado</th><th>Data</th><th>Observações</th><th>Ações</th></tr></thead><tbody>
+  return`<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Nome</th><th>Data</th><th>Alerta</th><th>Recorrente</th><th>Obs</th><th>Ações</th></tr></thead><tbody>
   ${datas.map(d=>`<tr>
     <td><span class="badge badge-blue">${DATA_TIPO_LABEL[d.tipo]||d.tipo}</span></td>
     <td>${d.nome_assoc||'—'}</td>
     <td>${d.data?fmtDate(d.data):'—'}</td>
+    <td style="font-size:12px">${d.alerta_dias?d.alerta_dias+' dias':'—'}</td>
+    <td style="font-size:12px">${d.recorrente!==false?'✓ Sim':'Não'}</td>
     <td style="font-size:12px;color:var(--texto-suave)">${d.obs||'—'}</td>
     <td><div class="td-actions">
       <button class="btn btn-xs btn-outline" onclick="openDataModal(${clienteId},${d.id})">Editar</button>
@@ -2636,7 +2677,7 @@ function _dfSet(k,v){_df[k]=v;}
 function openDataModal(clienteId,dataId){
   closeModal('modal-data');
   const d=dataId?(DB.datas_importantes||[]).find(x=>x.id==dataId):null;
-  _df={tipo:d?d.tipo:'aniversario',nome_assoc:d?d.nome_assoc:'',data:d?d.data:'',obs:d?d.obs:''};
+  _df={tipo:d?d.tipo:'aniversario',nome_assoc:d?d.nome_assoc:'',data:d?d.data:'',obs:d?d.obs:'',alerta_dias:d?(d.alerta_dias||0):30,recorrente:d?(d.recorrente!==false):true};
   const div=document.createElement('div');div.className='modal-overlay';div.id='modal-data';
   div.innerHTML=`<div class="modal">
   <div class="modal-header"><span class="modal-title">${dataId?'Editar':'Nova'} Data Importante</span>
@@ -2651,8 +2692,21 @@ function openDataModal(clienteId,dataId){
         <input type="text" value="${(_df.nome_assoc||'').replace(/"/g,'&quot;')}" placeholder="Ex: Lucas (filho), Aniversário dela…" oninput="_dfSet('nome_assoc',this.value)"></div>
       <div class="form-group"><label>Data</label>
         <input type="date" value="${_df.data||''}" oninput="_dfSet('data',this.value)"></div>
-      <div class="form-group"><label>Observações</label>
-        <input type="text" value="${(_df.obs||'').replace(/"/g,'&quot;')}" placeholder="Ex: Sempre quer surpresa" oninput="_dfSet('obs',this.value)"></div>
+      <div class="form-group"><label>Observações estratégicas</label>
+        <input type="text" value="${(_df.obs||'').replace(/"/g,'&quot;')}" placeholder="Ex: Gosta de surpresa, marido costuma comprar anel…" oninput="_dfSet('obs',this.value)"></div>
+      <div class="form-group"><label>Alerta (dias antes)</label>
+        <select onchange="_dfSet('alerta_dias',parseInt(this.value))">
+          <option value="0"${(_df.alerta_dias||0)===0?' selected':''}>Sem alerta</option>
+          <option value="7"${(_df.alerta_dias||0)===7?' selected':''}>7 dias antes</option>
+          <option value="15"${(_df.alerta_dias||0)===15?' selected':''}>15 dias antes</option>
+          <option value="30"${(_df.alerta_dias||0)===30?' selected':''}>30 dias antes</option>
+          <option value="60"${(_df.alerta_dias||0)===60?' selected':''}>60 dias antes</option>
+        </select></div>
+      <div class="form-group"><label>Recorrente (repete todo ano)</label>
+        <select onchange="_dfSet('recorrente',this.value==='true')">
+          <option value="true"${_df.recorrente!==false?' selected':''}>Sim</option>
+          <option value="false"${_df.recorrente===false?' selected':''}>Não — data única</option>
+        </select></div>
     </div>
   </div>
   <div class="modal-footer">
@@ -2667,7 +2721,8 @@ function saveData(clienteId,dataId){
   if(!DB.datas_importantes)DB.datas_importantes=[];
   const obj={id:dataId||DB.nextId('datas_importantes'),cliente_id:clienteId,
     tipo:_df.tipo||'aniversario',nome_assoc:(_df.nome_assoc||'').trim(),
-    data:_df.data||'',obs:(_df.obs||'').trim()};
+    data:_df.data||'',obs:(_df.obs||'').trim(),
+    alerta_dias:_df.alerta_dias||0,recorrente:_df.recorrente!==false};
   if(dataId){
     const i=DB.datas_importantes.findIndex(x=>x.id==dataId);
     if(i>=0)DB.datas_importantes[i]=obj;else DB.datas_importantes.push(obj);
