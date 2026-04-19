@@ -1042,7 +1042,7 @@ function migrateUsers(){
   if(changed)saveUsers();
 }
 const ROLES = {
-  admin:{label:'Administrador',modules:['dashboard','clientes','recebimentos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
+  admin:{label:'Administrador',modules:['dashboard','clientes','recebimentos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','datas_clientes','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
   comercial:{label:'Comercial',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
   producao:{label:'Produção',modules:['dashboard','os','etapas','qc','insumos_os','insumos','fichas'],verCusto:false,verMargem:false},
   consultora:{label:'Consultora',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
@@ -1201,6 +1201,46 @@ function escapeHTML(str){
 // Alias curto para uso em templates
 const esc = escapeHTML;
 
+
+// ─── Helpers para presenteados no cadastro de cliente ────────────
+function _cfAddPresenteado(){
+  if(!_cf.presenteados) _cf.presenteados=[];
+  _cf.presenteados.push({nome:'',data:''});
+  // Re-renderiza só a lista
+  const eid = parseInt(document.querySelector('[id^="presenteados-list-"]')?.id.split('-').pop())||0;
+  const el = document.getElementById('presenteados-list-'+eid);
+  if(el) el.outerHTML = _cfPresenteadosHTML(eid);
+  // Fallback: reabre o modal
+  else { const modal=document.querySelector('.modal-overlay #modal-cliente'); }
+}
+function _cfPresenteado(i, campo, val){
+  if(!_cf.presenteados) _cf.presenteados=[];
+  if(_cf.presenteados[i]) _cf.presenteados[i][campo]=val;
+}
+function _cfRemoverPresenteado(i){
+  if(!_cf.presenteados) return;
+  _cf.presenteados.splice(i,1);
+  const eid = parseInt(document.querySelector('[id^="presenteados-list-"]')?.id.split('-').pop())||0;
+  const el = document.getElementById('presenteados-list-'+eid);
+  if(el) el.outerHTML = _cfPresenteadosHTML(eid);
+}
+function _cfPresenteadosHTML(eid){
+  return '<div id="presenteados-list-'+eid+'" style="margin-bottom:8px">'
+    +(_cf.presenteados||[]).map((p,i)=>
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">'
+      +'<input type="text" value="'+esc(p.nome||'')+'" placeholder="Nome (ex: Lucas — filho)"'
+      +' oninput="_cfPresenteado('+i+',\'nome\',this.value)"'
+      +' style="flex:1;padding:8px 10px;border:1.5px solid #C4BDB4;border-radius:5px;font-family:Jost,sans-serif;font-size:13px;background:var(--fundo-input)">'
+      +'<input type="date" value="'+(p.data||'')+'"'
+      +' oninput="_cfPresenteado('+i+',\'data\',this.value)"'
+      +' style="padding:8px;border:1.5px solid #C4BDB4;border-radius:5px;font-family:Jost,sans-serif;font-size:13px;background:var(--fundo-input)">'
+      +'<button onclick="_cfRemoverPresenteado('+i+')"'
+      +' style="padding:6px 10px;border:1px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);cursor:pointer;color:var(--vermelho);font-size:13px">✕</button>'
+      +'</div>'
+    ).join('')
+    +'</div>';
+}
+
 function podeAprovarVenda(){return SESS&&(SESS.role==='admin'||SESS.pode_aprovar_venda===true);}
 function podeDispensarLab(){return SESS&&(SESS.role==='admin'||SESS.pode_dispensar_lab===true);}
 // QC: apenas Ana ou pessoa designada por ela
@@ -1337,6 +1377,7 @@ const NAV_ITEMS = [
   {id:'dashboard',icon:'◈',label:'Dashboard'},
   {section:'Clientes & Atendimento'},
   {id:'clientes',icon:'◇',label:'Clientes'},
+  {id:'datas_clientes',icon:'📅',label:'Datas & Alertas'},
   {id:'recebimentos',icon:'↓',label:'Recebimentos'},
   {id:'propostas',icon:'✦',label:'Propostas'},
   {section:'Produção'},
@@ -1387,7 +1428,7 @@ const PAGE_TITLES = {
   fichas:'Fichas de Oficina',nota_venda:'Nota de Venda',montagem:'Lotes de Montagem',
   romaneio:'Romaneio',
   caixa:'Caixa',
-  resultado:'Resultado · DRE',relatorios:'Relatórios',
+  resultado:'Resultado · DRE',relatorios:'Relatórios',datas_clientes:'Datas & Alertas',
   acessos:'Gerenciar Acessos',
 };
 
@@ -1679,7 +1720,7 @@ function navTo(mod){
 function renderModule(mod){
   const c=document.getElementById('content');
   const fns={
-    dashboard:renderDashboard,clientes:renderClientes,recebimentos:renderRecebimentos,propostas:renderPropostas,
+    dashboard:renderDashboard,clientes:renderClientes,datas_clientes:renderDatasClientes,recebimentos:renderRecebimentos,propostas:renderPropostas,
     os:renderOS,etapas:renderEtapas,qc:renderQC,insumos_os:renderInsumosOS,
     insumos:renderInsumos,colecao:renderColecao,produto:renderProduto,
     orcamentos:renderOrcamentos,cashback:renderCashback,financeiro:renderFinanceiro,vendas_excluidas:renderVendasExcluidas,
@@ -1842,6 +1883,28 @@ function renderDashboard(c){
     return !DB.qc.find(q=>q.os_id===e.os_id&&q.resultado==='aprovado');
   });
   const osSemQC=[...new Set(etapasConcluSemQC.map(e=>e.os_id))];
+
+    // ── Alertas: aniversário, casamento e presenteados do cadastro rápido ──
+  const hoje30 = new Date(); hoje30.setDate(hoje30.getDate()+30);
+  DB.clientes.forEach(cl=>{
+    const verificar = [
+      {data:cl.aniversario, tipo:'🎂 Aniversário', label:cl.apelido||cl.nome},
+      {data:cl.aniversario_casamento, tipo:'💍 Casamento', label:cl.apelido||cl.nome},
+      ...(cl.presenteados||[]).map(p=>({data:p.data, tipo:'🎁 Presenteia', label:(cl.apelido||cl.nome)+' → '+p.nome})),
+    ];
+    verificar.forEach(v=>{
+      if(!v.data) return;
+      const anoBase = new Date().getFullYear();
+      let dataRef = new Date(anoBase+'-'+v.data.substring(5,10));
+      if(dataRef < new Date()) dataRef = new Date((anoBase+1)+'-'+v.data.substring(5,10));
+      const diff = Math.floor((dataRef - new Date())/(1000*60*60*24));
+      if(diff>=0 && diff<=30){
+        const cor = diff<=7?'#A60000':diff<=15?'var(--ouro)':'var(--azul)';
+        alertaHTML += '<div class="alert-item alerta-ouro" onclick="abrirPerfilCliente('+cl.id+')" style="cursor:pointer">'
+          +'<span>'+v.tipo+' <strong>'+esc(v.label)+'</strong> em <strong style="color:'+cor+'">'+diff+' dia(s)</strong> · '+fmtDate(v.data)+'</span></div>';
+      }
+    });
+  });
 
     // ── Alertas de datas estratégicas ───────────────────────────────
   const hoje_d = new Date();
@@ -2315,8 +2378,29 @@ function openClienteModal(id){
             <option value="Premium"${sel('classif','Premium')}>Premium</option>
             <option value="VIP"${sel('classif','VIP')}>VIP</option>
           </select></div>
-        <div class="form-group"><label>Aniversário</label>
+        <div class="form-group"><label>Aniversário da Cliente</label>
           <input type="date" value="${_cf.aniversario}" oninput="_cfSet('aniversario',this.value)"></div>
+        <div class="form-group"><label>Aniversário de Casamento</label>
+          <input type="date" value="${_cf.aniversario_casamento||''}" oninput="_cfSet('aniversario_casamento',this.value)"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Aniversários de quem ela presenteia</label>
+          <div id="presenteados-list-${eid}" style="margin-bottom:8px">
+            ${(_cf.presenteados||[]).map((p,i)=>`
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+                <input type="text" value="${esc(p.nome)}" placeholder="Nome (ex: Lucas — filho)"
+                  oninput="_cfPresenteado(${i},'nome',this.value)"
+                  style="flex:1;padding:8px 10px;border:1.5px solid #C4BDB4;border-radius:5px;font-family:Jost,sans-serif;font-size:13px;background:var(--fundo-input)">
+                <input type="date" value="${p.data||''}"
+                  oninput="_cfPresenteado(${i},'data',this.value)"
+                  style="padding:8px;border:1.5px solid #C4BDB4;border-radius:5px;font-family:Jost,sans-serif;font-size:13px;background:var(--fundo-input)">
+                <button onclick="_cfRemoverPresenteado(${i})"
+                  style="padding:6px 10px;border:1px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);cursor:pointer;color:var(--vermelho);font-size:13px">✕</button>
+              </div>`).join('')}
+          </div>
+          <button onclick="_cfAddPresenteado()"
+            style="padding:7px 14px;border:1.5px dashed var(--ouro);border-radius:5px;background:transparent;color:var(--ouro);font-family:Jost,sans-serif;font-size:13px;cursor:pointer">
+            + Adicionar pessoa
+          </button>
+        </div>
         <div class="form-group"><label>Cidade</label>
           <input type="text" value="${(_cf.cidade).replace(/"/g,'&quot;')}" placeholder="São Paulo" oninput="_cfSet('cidade',this.value)"></div>
         <div class="form-group"><label>Instagram</label>
@@ -2453,7 +2537,9 @@ function saveCliente(id){
     email:       (_cf.email||'').trim(),
     tel:         (_cf.tel||'').trim(),
     instagram:   (_cf.instagram||'').trim(),
-    aniversario: _cf.aniversario||'',
+    aniversario:           _cf.aniversario||'',
+    aniversario_casamento: _cf.aniversario_casamento||'',
+    presenteados:          (_cf.presenteados||[]).filter(p=>p.nome||p.data),
     cidade:      (_cf.cidade||'').trim(),
     origem:      _cf.origem||'outro',
     classif:     _cf.classif||'Regular',
@@ -2611,6 +2697,9 @@ function verCliente(id){
         <p style="font-size:13px;color:var(--texto-suave)">Datas relevantes para contato proativo</p>
         <button class="btn btn-sm btn-gold" onclick="openDataModal(${cl.id})">+ Adicionar Data</button>
       </div>
+      ${cl.aniversario?`<div style="font-size:13px;padding:5px 0;border-bottom:1px solid var(--borda)">🎂 <strong>Aniversário:</strong> ${fmtDate(cl.aniversario)}</div>`:''}
+      ${cl.aniversario_casamento?`<div style="font-size:13px;padding:5px 0;border-bottom:1px solid var(--borda)">💍 <strong>Casamento:</strong> ${fmtDate(cl.aniversario_casamento)}</div>`:''}
+      ${(cl.presenteados||[]).length?`<div style="font-size:13px;padding:5px 0;border-bottom:1px solid var(--borda)">🎁 <strong>Presenteia:</strong> ${(cl.presenteados||[]).map(p=>esc(p.nome)+(p.data?' ('+fmtDate(p.data)+')':'')).join(' · ')}</div>`:''}
       <div id="datas-list-${cl.id}">${renderDatasList(cl.id)}</div>
     </div>
 
@@ -8635,15 +8724,32 @@ function selecionarFormaPgto(forma){
     const totalCBVd=parseFloat(document.getElementById('vd-total')?.value)||0;
     const usarCB=Math.min(saldoCBVd,totalCBVd);
     detalhe.innerHTML=`
-      <div style="background:rgba(46,125,50,.07);border:1px solid rgba(46,125,50,.25);border-radius:8px;padding:12px 14px">
+      <div style="background:rgba(46,125,50,.07);border:1px solid rgba(46,125,50,.25);border-radius:8px;padding:12px 14px;margin-bottom:10px">
         <p style="font-size:12px;font-weight:700;color:#2e7d32;margin-bottom:8px">↺ Saldo de Cashback: <strong>${fmt(saldoCBVd)}</strong></p>
         <div class="form-group">
           <label style="font-size:12px">Cashback a usar (R$)</label>
           <input id="vd-cashback" type="number" step="0.01" min="0" max="${saldoCBVd.toFixed(2)}"
             value="${usarCB.toFixed(2)}"
-            oninput="calcVenda()"
+            oninput="atualizarComplementoCB()"
             style="width:100%;padding:9px 10px;font-size:16px;border:1.5px solid #81c784;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right;font-weight:700">
           <p style="font-size:11px;color:var(--texto-suave);margin-top:3px">Máximo disponível: ${fmt(saldoCBVd)}</p>
+        </div>
+      </div>
+      <!-- Complemento quando cashback não cobre o total -->
+      <div id="vd-cb-complemento" style="display:${usarCB<totalCBVd?'block':'none'}">
+        <div style="background:var(--fundo);border:1.5px solid var(--borda-ouro);border-radius:8px;padding:12px 14px">
+          <p style="font-size:12px;font-weight:700;color:var(--ouro);margin-bottom:10px">
+            💳 Complemento necessário: <strong id="vd-cb-restante">${fmt(totalCBVd-usarCB)}</strong>
+          </p>
+          <p style="font-size:11px;color:var(--texto-suave);margin-bottom:10px">O cashback não cobre o valor total. Escolha como pagar o restante:</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            ${['PIX','Cartão Crédito','Cartão Débito','Dinheiro'].map(f=>
+              `<button onclick="document.querySelectorAll('.cb-comp-btn').forEach(b=>b.style.background='');this.style.background='var(--ouro)';this.style.color='#fff';document.getElementById('vd-cb-forma-comp').value='${f}';calcVenda()"
+                class="cb-comp-btn"
+                style="padding:7px 14px;border:1.5px solid var(--borda);border-radius:6px;font-family:Jost,sans-serif;font-size:12px;cursor:pointer;background:var(--fundo-input)">${f}</button>`
+            ).join('')}
+          </div>
+          <input type="hidden" id="vd-cb-forma-comp" value="PIX">
         </div>
       </div>`;
   } else if(forma==='Gold Credit'){
@@ -8695,6 +8801,22 @@ function selecionarFormaPgto(forma){
   }
   calcVenda();
 }
+
+// Atualiza painel de complemento ao mudar valor do cashback
+function atualizarComplementoCB(){
+  calcVenda();
+  const cbEl    = document.getElementById('vd-cashback');
+  const totalEl = document.getElementById('vd-total');
+  const compDiv = document.getElementById('vd-cb-complemento');
+  const restEl  = document.getElementById('vd-cb-restante');
+  if(!cbEl||!totalEl||!compDiv) return;
+  const cb    = parseFloat(cbEl.value)||0;
+  const total = parseFloat(totalEl.value)||0;
+  const resta = Math.max(0, total - cb);
+  compDiv.style.display = resta > 0.01 ? 'block' : 'none';
+  if(restEl) restEl.textContent = fmt(resta);
+}
+
 
 function calcVenda(){
   const total=parseFloat(document.getElementById('vd-total')?.value)||0;
@@ -8754,11 +8876,14 @@ function calcVenda(){
   } else if(forma==='Cashback'){
     const cbUsado=parseFloat(document.getElementById('vd-cashback')?.value)||0;
     const cbSaldoAtual=calcCashbackCliente(parseInt(document.getElementById('vd-cl')?.value)||0);
-    emCaixa=Math.max(0,total-cbUsado);
+    const cbRestCalc=Math.max(0,total-cbUsado);
+    emCaixa=cbRestCalc;
     const cbOk=cbUsado<=cbSaldoAtual+0.01;
+    const formaCompCalc=document.getElementById('vd-cb-forma-comp')?.value||'PIX';
     resumo.innerHTML=`<div style="background:rgba(46,125,50,.07);border:1px solid rgba(46,125,50,.25);border-radius:6px;padding:10px 14px;font-size:13px">
       ${!cbOk?`<p style="color:#eb5757;font-weight:600;margin-bottom:4px">⚠️ Cashback excede o saldo disponível (${fmt(cbSaldoAtual)})</p>`:''}
       <div style="display:flex;justify-content:space-between"><span>↺ Cashback usado:</span><span style="color:#2e7d32;font-weight:700">${fmt(cbUsado)}</span></div>
+      ${cbRestCalc>0.01?`<div style="display:flex;justify-content:space-between;margin-top:4px"><span>💳 Complemento (${formaCompCalc}):</span><span style="font-weight:700">${fmt(cbRestCalc)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;margin-top:4px"><span>Restante em caixa:</span><span style="font-weight:700">${fmt(emCaixa)}</span></div>
     </div>`;
   } else {
@@ -8924,9 +9049,20 @@ function saveVenda(){
     if(!cid){showToast('Selecione o cliente para usar cashback','danger');return;}
     const cbDisp=calcCashbackCliente(cid);
     if(cbUsar>cbDisp+0.01){showToast('Saldo de cashback insuficiente — disponível: '+fmt(cbDisp),'danger');return;}
-    emCaixa=Math.max(0,total-cbUsar);
-    pgtoDetalhes={cashback_usado:cbUsar};
-    cashbackUsado=cbUsar;  // passa para _pendingVenda → registrarVenda faz o débito
+    const cbRestante=Math.max(0,total-cbUsar);
+    emCaixa=cbRestante; // O que entrou em caixa é o complemento (não o cashback)
+    const formaComp=document.getElementById('vd-cb-forma-comp')?.value||'PIX';
+    // Se cashback não cobre tudo, verifica se forma do complemento foi selecionada
+    if(cbRestante>0.01 && !formaComp){
+      showToast('Selecione a forma de pagamento do complemento','danger');return;
+    }
+    formaRestante = cbRestante>0.01 ? 'Cashback+'+formaComp : 'Cashback';
+    pgtoDetalhes={
+      cashback_usado:cbUsar,
+      complemento_valor:cbRestante,
+      complemento_forma:cbRestante>0.01?formaComp:''
+    };
+    cashbackUsado=cbUsar;  // registrarVenda faz o débito
     // NÃO chamar usarCashbackCliente aqui — registrarVenda o faz
   } else {
     emCaixa=total;
@@ -11299,6 +11435,108 @@ function salvarCustosFixos(){
   });
   saveDB();fecharModal();showToast('Custos fixos salvos!');
   renderResultado(document.getElementById('content'));
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// MODULE: DATAS & ALERTAS
+// ══════════════════════════════════════════════════════════════════
+function renderDatasClientes(c){
+  const hoje = new Date();
+  const todasDatas = (DB.datas_importantes||[]).slice();
+
+  // Calcula proximidade de cada data
+  const datasComProximidade = todasDatas.map(d=>{
+    if(!d.data) return {...d, _diff:9999, _dataRef:null};
+    const anoBase = hoje.getFullYear();
+    const mmdd = d.data.substring(5,10);
+    let dataRef = new Date(anoBase+'-'+mmdd);
+    if(d.recorrente!==false && dataRef < hoje) dataRef = new Date((anoBase+1)+'-'+mmdd);
+    const diff = Math.floor((dataRef - hoje)/(1000*60*60*24));
+    return {...d, _diff:diff, _dataRef:dataRef};
+  }).sort((a,b)=>a._diff-b._diff);
+
+  // Filtro
+  const filtro = window._datasFilter||'todos';
+  const datasVisiveis = filtro==='proximas'
+    ? datasComProximidade.filter(d=>d._diff>=0&&d._diff<=60)
+    : filtro==='aniversarios'
+    ? datasComProximidade.filter(d=>d.tipo==='aniversario'||d.tipo==='aniversario_filho'||d.tipo==='aniversario_marido')
+    : datasComProximidade.filter(d=>d._diff>=0);
+
+  c.innerHTML = `
+  <div class="page-header">
+    <div><p class="page-title">📅 Datas & Alertas</p>
+      <p class="page-sub">${todasDatas.length} data(s) cadastrada(s) · ${datasComProximidade.filter(d=>d._diff>=0&&d._diff<=30).length} nos próximos 30 dias</p>
+    </div>
+    <button class="btn btn-primary" onclick="openDataModalGlobal()">+ Nova Data</button>
+  </div>
+
+  <!-- Filtros -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+    ${[['todos','Todas'],['proximas','Próximos 60 dias'],['aniversarios','Aniversários']].map(([k,v])=>`
+      <button onclick="window._datasFilter='${k}';renderDatasClientes(document.getElementById('content'))"
+        style="padding:8px 16px;border:1.5px solid ${filtro===k?'var(--ouro)':'var(--borda)'};border-radius:6px;
+          background:${filtro===k?'var(--ouro)':'var(--fundo-input)'};color:${filtro===k?'#fff':'var(--texto)'};
+          font-family:Jost,sans-serif;font-size:13px;font-weight:${filtro===k?700:400};cursor:pointer">${v}</button>
+    `).join('')}
+  </div>
+
+  <!-- Lista -->
+  ${datasVisiveis.length===0
+    ? '<div class="empty-state"><div class="empty-state-icon">📅</div><p>Nenhuma data encontrada para este filtro.</p></div>'
+    : `<div class="card"><div class="card-body" style="padding:0"><div class="table-wrap"><table>
+        <thead><tr>
+          <th>Cliente</th><th>Tipo</th><th>Nome</th>
+          <th>Data</th><th>Faltam</th><th>Obs</th><th>Ações</th>
+        </tr></thead>
+        <tbody>
+          ${datasVisiveis.map(d=>{
+            const cl = DB.clientes.find(c=>c.id==d.cliente_id)||{};
+            const faltam = d._diff;
+            const cor = faltam<=7?'#A60000':faltam<=15?'var(--ouro)':faltam<=30?'var(--azul)':'var(--texto-suave)';
+            return '<tr>'
+              +'<td class="fw-600" style="cursor:pointer" onclick="abrirPerfilCliente('+d.cliente_id+')">'
+              +esc(cl.apelido||cl.nome||'—')+'</td>'
+              +'<td><span class="badge badge-blue" style="font-size:11px">'+(DATA_TIPO_LABEL[d.tipo]||d.tipo)+'</span></td>'
+              +'<td>'+(d.nome_assoc?esc(d.nome_assoc):'—')+'</td>'
+              +'<td>'+fmtDate(d.data)+'</td>'
+              +'<td style="font-weight:700;color:'+cor+'">'+(faltam>=0?faltam+' dias':'passado')+'</td>'
+              +'<td style="font-size:12px;color:var(--texto-suave)">'+(d.obs?esc(d.obs):'—')+'</td>'
+              +'<td><div class="td-actions">'
+              +'<button class="btn btn-xs btn-outline" onclick="openDataModal('+d.cliente_id+','+d.id+')">Editar</button>'
+              +'<button class="btn btn-xs btn-danger" onclick="excluirData('+d.id+','+d.cliente_id+');renderModule(\"datas_clientes\")">✕</button>'
+              +'</div></td>'
+              +'</tr>';
+          }).join('')}
+        </tbody>
+      </table></div></div></div>`
+  }`;
+}
+
+// Abre modal de nova data sem cliente pré-selecionado (seleciona na hora)
+function openDataModalGlobal(){
+  // Pede cliente primeiro
+  const clOpts = DB.clientes.map(cl=>'<option value="'+cl.id+'">'+esc(cl.nome)+'</option>').join('');
+  const div=document.createElement('div');div.className='modal-overlay';div.id='modal-data-global';
+  div.innerHTML=`<div class="modal">
+    <div class="modal-header"><span class="modal-title">Nova Data Importante</span>
+      <button class="modal-close" onclick="closeModal('modal-data-global')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Cliente</label>
+        <select id="dg-cliente" style="width:100%;padding:9px;border:1.5px solid #C4BDB4;border-radius:5px;font-family:Jost,sans-serif;font-size:14px;background:var(--fundo-input)">
+          <option value="">— selecionar cliente —</option>
+          ${clOpts}
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modal-data-global')">Cancelar</button>
+      <button class="btn btn-primary" onclick="(()=>{const cid=parseInt(document.getElementById('dg-cliente').value);if(!cid){showToast('Selecione um cliente','danger');return;}closeModal('modal-data-global');openDataModal(cid);})()">Próximo →</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
 }
 
 
