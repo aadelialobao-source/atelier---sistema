@@ -792,11 +792,15 @@ async function hashPass(plain, userLogin){
 async function verifyPass(input, stored, userLogin){
   if(!input||!stored)return false;
   if(isHashed(stored)){
-    // Senha hasheada com salt — compara
+    // Tenta com salt (novo formato)
     const salt = (userLogin||'') + _PASS_PEPPER;
-    return ('sha256:'+(await sha256(input)))===stored;
+    const hashComSalt = 'sha256:'+(await sha256(salt + input + salt));
+    if(hashComSalt===stored) return true;
+    // Fallback: tenta sem salt (formato antigo)
+    const hashSemSalt = 'sha256:'+(await sha256(input));
+    return hashSemSalt===stored;
   }
-  // Migração: senha ainda em plaintext — compara direto e depois hasheia
+  // Plaintext — compara direto
   return input===stored;
 }
 
