@@ -5234,6 +5234,7 @@ let ORC = {tipo:null,params:{au24k:757.05,dolar:5.85,conv18k:0.75,perda:10,taxa_
   b2:{},b2_items:[],
   b3:{cartao:3,marketing:5,comissao:14,cashback:3,tributos:6,markup:3.2,desconto_max:10,margem_alvo:25},
   personal_styler_id:null,
+  colecao_ref_id:null,
   fotos:[]
 };
 // Sincroniza ORC.params com DB após loadDB()
@@ -5654,7 +5655,36 @@ function renderOrcJoiaNova(){
   const p=ORC.params;
   const au18k_bruta=p.au24k*p.conv18k;
   const au18k_liq=au18k_bruta*(1-p.perda/100);
+
+  // Monta opções da coleção do atelier (peças cadastradas)
+  const pecasAtelier=DB.colecao.filter(pc=>pc.estoque>0||ORC.colecao_ref_id===pc.id);
+  const colecaoOpts=pecasAtelier.map(pc=>{
+    const col=pc.colecao_atelier_id?DB.colecoes_atelier.find(c=>c.id===pc.colecao_atelier_id):null;
+    return`<option value="${pc.id}" ${ORC.colecao_ref_id===pc.id?'selected':''}>${pc.nome}${pc.metal?' · '+pc.metal:''}${col?' · '+col.nome:''} — ${fmt(pc.preco)}</option>`;
+  }).join('');
+
   return`
+  <!-- SELETOR DE PEÇA DA COLEÇÃO -->
+  <div style="background:linear-gradient(135deg,var(--azul),var(--azul-medio));border-radius:8px;padding:14px 18px;margin-bottom:16px;border:1px solid rgba(176,142,86,.2)">
+    <p style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ouro);margin-bottom:8px">✦ Referência de Peça da Coleção (opcional)</p>
+    <p style="font-size:12px;color:rgba(255,255,255,.65);margin-bottom:10px">Selecione uma peça existente para usar como base — preenche peso, metal e referência de preço automaticamente. Deixe em branco para joia totalmente nova.</p>
+    <select id="jn-colecao-ref" onchange="selecionarRefColecaoJN()"
+      style="width:100%;padding:9px 12px;font-size:14px;border:1.5px solid rgba(176,142,86,.4);border-radius:6px;background:rgba(255,255,255,.08);color:#fff;font-family:Jost,sans-serif">
+      <option value="">— Joia nova (sem referência de coleção) —</option>
+      ${colecaoOpts}
+    </select>
+    ${ORC.colecao_ref_id?(()=>{
+      const pc=DB.colecao.find(p=>p.id===ORC.colecao_ref_id);
+      if(!pc)return'';
+      return`<div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap">
+        <div><p style="font-size:10px;color:rgba(176,142,86,.7)">Metal</p><p style="font-size:14px;color:#fff">${pc.metal||'—'}</p></div>
+        <div><p style="font-size:10px;color:rgba(176,142,86,.7)">Peso ref.</p><p style="font-size:14px;color:#fff">${pc.peso?fmtN(pc.peso,2)+'g':'—'}</p></div>
+        <div><p style="font-size:10px;color:rgba(176,142,86,.7)">Preço catálogo</p><p style="font-size:14px;color:var(--ouro);font-weight:700">${fmt(pc.preco)}</p></div>
+        <div><p style="font-size:10px;color:rgba(176,142,86,.7)">Estoque</p><p style="font-size:14px;color:#fff">${pc.estoque}</p></div>
+      </div>`;
+    })():''}
+  </div>
+
   <!-- PARÂMETROS -->
   <div class="param-bar">
     <span class="param-item">Au 24k: <strong id="pb-au24k">${fmt(p.au24k)}/g</strong></span>
@@ -6056,6 +6086,38 @@ function removeExpItem(i){
 }
 
 function setMarkup(v){document.getElementById('b3-markup').value=v;calcOrc();}
+
+function selecionarRefColecaoJN(){
+  const pid=parseInt(document.getElementById('jn-colecao-ref')?.value)||null;
+  ORC.colecao_ref_id=pid;
+  if(pid){
+    const pc=DB.colecao.find(p=>p.id===pid);
+    if(pc){
+      // Preenche peso ouro se cadastrado
+      if(pc.peso){
+        const pouroEl=document.getElementById('b1-pouro');
+        const ptotalEl=document.getElementById('b1-ptotal');
+        if(pouroEl){pouroEl.value=pc.peso;ORC.b1.peso_ouro=pc.peso;}
+        if(ptotalEl&&!ptotalEl.value){ptotalEl.value=pc.peso;ORC.b1.peso_total=pc.peso;}
+      }
+      // Preenche descrição do orçamento se ainda vazia
+      const descEl=document.getElementById('orc-desc');
+      if(descEl&&!descEl.value){
+        const col=pc.colecao_atelier_id?DB.colecoes_atelier.find(c=>c.id===pc.colecao_atelier_id):null;
+        descEl.value=pc.nome+(col?' — '+col.nome:'')+(pc.metal?' · '+pc.metal:'');
+      }
+      // Define markup sugerido com base no preço catalogo vs custo estimado
+      ORC.b3._preco_ref_colecao=pc.preco;
+    }
+  } else {
+    ORC.colecao_ref_id=null;
+    ORC.b3._preco_ref_colecao=null;
+  }
+  calcOrc();
+  // Re-renderiza para mostrar o painel de informações da peça
+  const orcBody=document.getElementById('orc-body');
+  if(orcBody)orcBody.innerHTML=renderOrcJoiaNova();
+}
 
 function calcOrc(){
   const p=ORC.params;
@@ -6849,6 +6911,7 @@ function saveOrcamento(){
     params:{...ORC.params},bloco1:{...ORC.b1,gemas:[...ORC.b1.gemas]},
     bloco2:{items:[...(ORC.b2_items||[])]},bloco3:{...ORC.b3},
     personal_styler_id:ORC.personal_styler_id||null,
+    colecao_ref_id:ORC.colecao_ref_id||null,
     prazo_entrega:document.getElementById('orc-prazo-entrega')?.value||'',
     fotos:midiaGet('orc').slice(),
     desenhos:midiaGet('orc_desenho').slice()};
@@ -6878,7 +6941,9 @@ function editOrcamento(id){
   ORC={tipo:o.tipo,params:{...o.params},
     b1:{...o.bloco1,gemas:[...(o.bloco1?.gemas||[])],insumos_orc:[...(o.bloco1?.insumos_orc||[])]},
     b2:{},b2_items:Array.isArray(b2saved.items)?[...b2saved.items]:[],
-    b3:{...o.bloco3},fotos:[]};
+    b3:{...o.bloco3},fotos:[],
+    personal_styler_id:o.personal_styler_id||null,
+    colecao_ref_id:o.colecao_ref_id||null};
   renderOrcForm();
   setTimeout(function(){
     _initOrcMidia();
