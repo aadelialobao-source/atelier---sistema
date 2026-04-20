@@ -604,6 +604,23 @@ function loadDB(){
       DB.params_reserva.bonus_pct=15;
       saveDB();
     }
+    // v_endereco: atualiza endereço do atelier para Teresina PI
+    if(!DB.atelier.endereco||DB.atelier.cidade==='São Paulo'){
+      DB.atelier.endereco='Rua Angélica, 920';
+      DB.atelier.bairro='Fátima';
+      DB.atelier.cidade='Teresina';
+      DB.atelier.uf='PI';
+      saveDB();
+    }
+    // v_cargos: corrige cargo de Luiz e Mateus para Ourives
+    if(DB.colaboradores&&DB.colaboradores.length>0){
+      DB.colaboradores.forEach(function(c){
+        if(c.nome==='Luiz'||c.nome==='Mateus'||c.nome==='Matheus'){
+          c.cargo='Ourives';
+        }
+      });
+      saveDB();
+    }
     // v_colecoes: popula coleções do Brand Book se ainda não existirem
     if(!DB.colecoes_atelier||DB.colecoes_atelier.length===0){
       DB.colecoes_atelier=[
@@ -7265,8 +7282,10 @@ function gerarReciboOS(osId){
   var grid=document.createElement('div');
   grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px';
 
-  grid.appendChild(infoRow('Destino',
-    os.origem==='atelier'?('🏛 Coleção: '+(col?col.nome:'Atelier')):('👤 '+(cl?cl.nome:'Sem cliente')),true));
+  grid.appendChild(infoRow('Para',
+    os.responsavel?('👤 '+os.responsavel):'Sem responsável definido',true));
+  grid.appendChild(infoRow('Cliente / Origem',
+    os.origem==='atelier'?('🏛 '+(col?col.nome:'Coleção Atelier')):(cl?cl.nome:'Sem cliente')));
   grid.appendChild(infoRow('Status', STATUS_LABEL[os.status]||os.status));
   grid.appendChild(infoRow('Prazo', os.prazo?fmtDate(os.prazo):'Sem prazo definido'));
   grid.appendChild(infoRow('Responsável', os.responsavel||'—'));
