@@ -379,13 +379,15 @@ const DB = {
   despesas:[],
   despesas_recorrentes:[],
   fichas_tecnicas:[],
+  protocolos:[],
   _ids:{
     clientes:0,datas_importantes:0,recebimentos:0,os:0,etapas:0,qc:0,
     orcamentos:0,propostas:0,entradas_ouro:0,vendas_credito:0,
     insumos:0,colecao:0,colecoes_atelier:0,financeiro:0,vendas:0,
     colaboradores:0,metas:0,cashback:0,uso_insumos_os:0,
     movimentos_estoque:0,audit_log:0,romaneios:0,vendas_excluidas:0,
-    metas_equipe:0,lotes_montagem:0,despesas:0,fichas_tecnicas:0
+    metas_equipe:0,lotes_montagem:0,despesas:0,fichas_tecnicas:0,
+    protocolos:0
   },
   params_montagem:{valor_pedra:30,valor_macrame:15,valor_outro:20},
   params_reserva:{au24k:757.05,dolar:5.85,conv18k:0.75,perda:10,bonus_pct:15,limite_uso_pct:40,validade_meses:24},
@@ -416,12 +418,20 @@ const DB = {
 
 var DB_KEYS = ['clientes','datas_importantes','recebimentos','os','etapas','qc','orcamentos','propostas',
   'entradas_ouro','vendas_credito','insumos','colecao','colecoes_atelier','financeiro','vendas',
-  'colaboradores','metas','cashback','uso_insumos_os','movimentos_estoque','audit_log','romaneios','equipes','personal_stylers','lotes_montagem','despesas','despesas_recorrentes','vendas_excluidas','metas_equipe'];
+  'colaboradores','metas','cashback','uso_insumos_os','movimentos_estoque','audit_log','romaneios','protocolos','equipes','personal_stylers','lotes_montagem','despesas','despesas_recorrentes','vendas_excluidas','metas_equipe'];
 var DB_OBJ_KEYS = ['atelier','params_reserva','params_custos_fixos','caixa','params_montagem'];
 
 // ═════════════════════════════════════════════════════════════
 // MODULE: DB & STORAGE
 // ═════════════════════════════════════════════════════════════
+
+// Gera próximo ID para a coleção (incrementa _ids e retorna)
+DB.nextId = function(key){
+  if(!DB._ids) DB._ids = {};
+  DB._ids[key] = (DB._ids[key]||0) + 1;
+  return DB._ids[key];
+};
+
 
 function saveDB(){
   try{
@@ -1053,10 +1063,10 @@ function migrateUsers(){
   if(changed)saveUsers();
 }
 const ROLES = {
-  admin:{label:'Administrador',modules:['dashboard','clientes','recebimentos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','datas_clientes','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
-  comercial:{label:'Comercial',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
+  admin:{label:'Administrador',modules:['dashboard','clientes','protocolos','recebimentos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','datas_clientes','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
+  comercial:{label:'Comercial',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
   producao:{label:'Produção',modules:['dashboard','os','etapas','qc','insumos_os','insumos','fichas'],verCusto:false,verMargem:false},
-  consultora:{label:'Consultora',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
+  consultora:{label:'Consultora',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
   financeiro:{label:'Financeiro',modules:['dashboard','orcamentos','financeiro','despesas','cashback','metas','comissoes','reserva_dash','carteiras','historico_reserva','vendas_excluidas'],verCusto:true,verMargem:true},
 };
 let SESS = null;
@@ -1388,6 +1398,7 @@ const NAV_ITEMS = [
   {id:'dashboard',icon:'◈',label:'Dashboard'},
   {section:'Clientes & Atendimento'},
   {id:'clientes',icon:'◇',label:'Clientes'},
+  {id:'protocolos',icon:'↧',label:'Protocolo de Entrada'},
   {id:'recebimentos',icon:'↓',label:'Recebimentos'},
   {id:'propostas',icon:'✦',label:'Propostas'},
   {section:'Produção'},
@@ -1430,6 +1441,7 @@ const PAGE_TITLES = {
   vendas:'Vendas',metas:'Metas',comissoes:'Comissões',
   reserva_dash:'Reserva Ana Lobão',receber_ouro:'Receber Ouro',carteiras:'Carteiras',historico_reserva:'Histórico Reserva',
   fichas:'Fichas de Oficina',nota_venda:'Nota de Venda',romaneio:'Romaneio',
+  protocolos:'Protocolo de Entrada',
   caixa:'Caixa',
   acessos:'Gerenciar Acessos',
 };
@@ -1645,6 +1657,7 @@ function renderModule(mod){
     vendas:renderVendas,metas:renderMetas,comissoes:renderComissoes,
     reserva_dash:renderReservaDash,receber_ouro:renderReceberOuro,carteiras:renderCarteiras,historico_reserva:renderHistoricoReserva,
     fichas:renderFichas,nota_venda:renderNotaVenda,romaneio:renderRomaneio,
+    protocolos:renderProtocolos,
     caixa:renderCaixa,
     acessos:renderAcessos,
   };
@@ -7414,6 +7427,492 @@ function gerarReciboOS(osId){
 
   ov.appendChild(wrap);
   ov.appendChild(btnBar);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// MODULE: PROTOCOLO DE ENTRADA
+// Uma visita → N peças → N OS → 1 recibo para a cliente
+// ═══════════════════════════════════════════════════════════════════
+
+var SERVICO_LABEL = {
+  ressignificacao:'Ressignificação',
+  conserto:'Conserto / Reparo',
+  avaliacao:'Avaliação',
+  limpeza:'Limpeza / Polimento',
+  joia_nova:'Joia Nova',
+  outro:'Outro'
+};
+var ESTADO_LABEL = {bom:'Bom estado',regular:'Estado regular',danificado:'Danificado / Com defeito'};
+var PROTO_STATUS = {
+  aguardando:'Aguardando análise',
+  orcamento_entregue:'Orçamento entregue',
+  em_producao:'Em produção',
+  pronto:'Pronto para retirada',
+  entregue:'Entregue'
+};
+var PROTO_STATUS_BADGE = {
+  aguardando:'badge-yellow',
+  orcamento_entregue:'badge-blue',
+  em_producao:'badge-blue',
+  pronto:'badge-green',
+  entregue:'badge-gray'
+};
+
+function renderProtocolos(c){
+  var list=DB.protocolos||[];
+  c.innerHTML=`
+  <div class="page-header">
+    <div>
+      <p class="page-title">↧ Protocolo de Entrada</p>
+      <p class="page-sub">${list.length} protocolo(s) registrado(s)</p>
+    </div>
+    <button class="btn btn-primary" onclick="openProtocoloModal()">+ Novo Protocolo</button>
+  </div>
+  ${list.length===0?`
+  <div class="empty-state">
+    <div class="empty-state-icon">↧</div>
+    <p>Nenhum protocolo registrado</p>
+    <p style="font-size:13px;color:var(--texto-suave);margin-top:8px">Registre a entrada de peças da cliente com um único protocolo.</p>
+    <button class="btn btn-primary" style="margin-top:16px" onclick="openProtocoloModal()">+ Novo Protocolo</button>
+  </div>`:
+  `<div class="card">
+    <div class="card-body" style="padding:0">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:2px solid var(--borda)">
+        <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Protocolo</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Cliente</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Peças</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Data</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Status</th>
+        <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Ações</th>
+      </tr></thead>
+      <tbody>
+        ${[...list].reverse().map(function(p){
+          var cl=DB.clientes.find(function(c){return c.id==p.cliente_id;})||{};
+          return '<tr style="border-bottom:1px solid var(--borda)">'
+            +'<td style="padding:10px 14px"><strong style="color:var(--azul);font-family:\'Cormorant Garamond\',serif;font-size:15px">#'+p.numero+'</strong></td>'
+            +'<td style="padding:10px 14px">'+esc(cl.nome||'—')+'</td>'
+            +'<td style="padding:10px 14px"><span style="display:inline-flex;gap:4px;flex-wrap:wrap">'
+              +(p.pecas||[]).map(function(pc){
+                return '<span class="badge badge-gray" style="font-size:10px">'+esc(SERVICO_LABEL[pc.servico]||pc.servico)+'</span>';
+              }).join('')
+            +'</span></td>'
+            +'<td style="padding:10px 14px;font-size:13px">'+fmtDate(p.data)+(p.hora?' '+p.hora:'')+'</td>'
+            +'<td style="padding:10px 14px"><span class="badge '+(PROTO_STATUS_BADGE[p.status]||'badge-gray')+'">'+(PROTO_STATUS[p.status]||p.status)+'</span></td>'
+            +'<td style="padding:10px 14px"><div class="td-actions">'
+              +'<button class="btn btn-xs btn-outline" onclick="openProtocoloModal('+p.id+')">✎ Editar</button>'
+              +'<button class="btn btn-xs btn-gold" onclick="gerarReciboProtocolo('+p.id+')">🖨 Recibo</button>'
+              +(podeExcluir()?'<button class="btn btn-xs btn-danger" onclick="excluirProtocolo('+p.id+')">✕</button>':'')
+            +'</div></td>'
+          +'</tr>';
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+  </div>`}`;
+}
+
+// ── Número de protocolo formatado ──────────────────────────────────
+function gerarNumeroProtocolo(){
+  var ano=new Date().getFullYear();
+  var seq=(DB._ids.protocolos||0)+1;
+  return 'P-'+ano+'-'+String(seq).padStart(3,'0');
+}
+
+// ── Modal Protocolo ────────────────────────────────────────────────
+var _PROTO_PECAS=[]; // peças do protocolo em edição
+
+function openProtocoloModal(id){
+  var p=id?DB.protocolos.find(function(x){return x.id==id;}):{};
+  if(!p)return;
+  _PROTO_PECAS=p.pecas?(p.pecas.map(function(x){return Object.assign({},x);})):[];
+  if(_PROTO_PECAS.length===0) _PROTO_PECAS=[{id:1,descricao:'',servico:'conserto',peso:'',material:'18k',estado:'bom',obs:'',os_id:null}];
+
+  var collabs=DB.colaboradores.filter(function(c){return c.ativo;});
+  var colOpts=collabs.map(function(c){return '<option value="'+c.nome+'"'+(p.atendente===c.nome?' selected':'')+'>'+c.nome+'</option>';}).join('');
+  colOpts+='<option value="Ana Lobão"'+(p.atendente==='Ana Lobão'?' selected':'')+'>Ana Lobão</option>';
+
+  var div=document.createElement('div');div.className='modal-overlay';div.id='modal-proto';
+  div.innerHTML=`<div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">${id?'Protocolo #'+p.numero:'Novo Protocolo de Entrada'}</span>
+      <button class="modal-close" onclick="closeModal('modal-proto')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="gap:14px;margin-bottom:20px">
+        <div class="form-group"><label>Cliente *</label>
+          <select id="proto-cl">
+            <option value="">— Selecione —</option>
+            ${DB.clientes.map(function(cl){return '<option value="'+cl.id+'"'+(p.cliente_id==cl.id?' selected':'')+'>'+esc(cl.nome)+'</option>';}).join('')}
+          </select></div>
+        <div class="form-group"><label>Atendente</label>
+          <select id="proto-atendente">${colOpts}</select></div>
+        <div class="form-group"><label>Data</label>
+          <input type="date" id="proto-data" value="${p.data||today()}"></div>
+        <div class="form-group"><label>Hora</label>
+          <input type="time" id="proto-hora" value="${p.hora||new Date().toTimeString().slice(0,5)}"></div>
+        <div class="form-group"><label>Status</label>
+          <select id="proto-status">
+            ${Object.entries(PROTO_STATUS).map(function(e){return '<option value="'+e[0]+'"'+(p.status===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')}
+          </select></div>
+        <div class="form-group"><label>Prazo / Previsão de contato</label>
+          <input type="date" id="proto-prazo" value="${p.prazo||''}"></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Observações gerais</label>
+          <textarea id="proto-obs" rows="2" placeholder="Observações sobre a visita, combinados, etc.">${p.obs||''}</textarea></div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <p style="font-family:'Cormorant Garamond',serif;font-size:17px;color:var(--azul);font-weight:500">Peças recebidas</p>
+        <button class="btn btn-sm btn-outline" onclick="protocoloAdicionarPeca()">+ Adicionar peça</button>
+      </div>
+      <div id="proto-pecas-list"></div>
+    </div>
+    <div class="modal-footer">
+      ${id&&podeExcluir()?'<button class="btn btn-danger" onclick="excluirProtocolo('+id+')">Excluir</button>':''}
+      <button class="btn btn-outline" onclick="closeModal(\'modal-proto\')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveProtocolo(${id||0})">✦ Salvar e Gerar OS</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  protocoloRenderPecas();
+}
+
+function protocoloRenderPecas(){
+  var el=document.getElementById('proto-pecas-list');if(!el)return;
+  if(_PROTO_PECAS.length===0){
+    el.innerHTML='<p style="font-size:13px;color:var(--texto-suave);text-align:center;padding:16px">Nenhuma peça adicionada.</p>';
+    return;
+  }
+  el.innerHTML=_PROTO_PECAS.map(function(pc,i){
+    var fotos=(pc.fotos||[]);
+    var fotosHtml=fotos.length?fotos.map(function(f,fi){
+      if(f.tipo==='pdf'){
+        return '<div style="display:flex;align-items:center;gap:6px;background:#f0f0f0;border-radius:4px;padding:4px 8px;font-size:11px">'
+          +'📄 '+esc(f.nome)
+          +'<button type="button" onclick="protocoloRemoverFoto('+i+','+fi+')" style="background:none;border:none;color:#eb5757;font-size:14px;cursor:pointer;line-height:1;margin-left:4px">×</button>'
+          +'</div>';
+      }
+      return '<div style="position:relative;display:inline-block">'
+        +'<img src="'+f.src+'" onclick="protocoloZoomFoto(\''+f.src+'\')" style="width:64px;height:64px;object-fit:cover;border-radius:4px;cursor:zoom-in;border:1px solid var(--borda)">'
+        +'<button type="button" onclick="protocoloRemoverFoto('+i+','+fi+')" style="position:absolute;top:-5px;right:-5px;background:#eb5757;color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:10px;cursor:pointer;line-height:1">×</button>'
+        +'</div>';
+    }).join(' '):'<span style="font-size:11px;color:var(--texto-suave)">Sem fotos</span>';
+
+    return '<div style="border:1px solid var(--borda);border-radius:8px;padding:14px 16px;margin-bottom:10px;background:var(--fundo)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+        +'<span style="font-family:\'Cormorant Garamond\',serif;font-size:15px;color:var(--azul);font-weight:600">Peça '+(i+1)+'</span>'
+        +(pc.os_id?'<span class="badge badge-blue" style="font-size:11px">OS #'+pc.os_id+' gerada</span>':'')
+        +'<button type="button" onclick="protocoloRemoverPeca('+i+')" style="background:none;border:none;color:#eb5757;font-size:18px;cursor:pointer;line-height:1">×</button>'
+      +'</div>'
+      +'<div class="form-grid" style="gap:10px">'
+        +'<div class="form-group" style="grid-column:1/-1"><label>Descrição da peça *</label>'
+          +'<input id="pp-desc-'+i+'" value="'+esc(pc.descricao)+'" placeholder="Ex: Anel solitário 18k, Par de brincos argola..." '
+          +'onchange="_PROTO_PECAS['+i+'].descricao=this.value"></div>'
+        +'<div class="form-group"><label>Serviço</label>'
+          +'<select id="pp-serv-'+i+'" onchange="_PROTO_PECAS['+i+'].servico=this.value">'
+            +Object.entries(SERVICO_LABEL).map(function(e){return '<option value="'+e[0]+'"'+(pc.servico===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')
+          +'</select></div>'
+        +'<div class="form-group"><label>Peso / Qtd</label>'
+          +'<input id="pp-peso-'+i+'" value="'+esc(pc.peso)+'" placeholder="Ex: 4,2g ou 1 par" '
+          +'onchange="_PROTO_PECAS['+i+'].peso=this.value"></div>'
+        +'<div class="form-group"><label>Material</label>'
+          +'<input id="pp-mat-'+i+'" value="'+esc(pc.material||'18k')+'" placeholder="18k, prata, outro" '
+          +'onchange="_PROTO_PECAS['+i+'].material=this.value"></div>'
+        +'<div class="form-group"><label>Estado</label>'
+          +'<select id="pp-est-'+i+'" onchange="_PROTO_PECAS['+i+'].estado=this.value">'
+            +Object.entries(ESTADO_LABEL).map(function(e){return '<option value="'+e[0]+'"'+(pc.estado===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')
+          +'</select></div>'
+        +'<div class="form-group" style="grid-column:1/-1"><label>Obs. da peça</label>'
+          +'<input id="pp-obs-'+i+'" value="'+esc(pc.obs||'')+'" placeholder="Defeito específico, pedido especial, detalhes..." '
+          +'onchange="_PROTO_PECAS['+i+'].obs=this.value"></div>'
+        // Photos section
+        +'<div class="form-group" style="grid-column:1/-1">'
+          +'<label>📎 Fotos / PDF da peça</label>'
+          +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;align-items:center">'
+            +fotosHtml
+          +'</div>'
+          +'<input type="file" id="pp-file-'+i+'" accept="image/*,.pdf" multiple style="display:none" '
+            +'onchange="protocoloAdicionarFotos(event,'+i+')">'
+          +'<button type="button" class="btn btn-sm btn-outline" '
+            +'onclick="document.getElementById(\'pp-file-'+i+'\').click()">'
+            +'📎 Anexar foto ou PDF'
+          +'</button>'
+          +'<span style="font-size:11px;color:var(--texto-suave);margin-left:8px">Máx. 5 arquivos · 5MB</span>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
+}
+
+
+function protocoloAdicionarFotos(e, i){
+  var files=Array.from(e.target.files);
+  if(!_PROTO_PECAS[i].fotos) _PROTO_PECAS[i].fotos=[];
+  var restam=5-_PROTO_PECAS[i].fotos.length;
+  if(restam<=0){showToast('Limite de 5 arquivos por peça','warn');return;}
+  files.slice(0,restam).forEach(function(f){
+    if(f.size>5*1024*1024){showToast(f.name+' excede 5MB','warn');return;}
+    var isPDF=f.type==='application/pdf';
+    var r=new FileReader();
+    r.onload=function(ev){
+      _PROTO_PECAS[i].fotos.push({tipo:isPDF?'pdf':'img',src:ev.target.result,nome:f.name});
+      protocoloRenderPecas();
+    };
+    r.readAsDataURL(f);
+  });
+  e.target.value='';
+}
+function protocoloRemoverFoto(i,fi){
+  if(_PROTO_PECAS[i]&&_PROTO_PECAS[i].fotos) _PROTO_PECAS[i].fotos.splice(fi,1);
+  protocoloRenderPecas();
+}
+function protocoloZoomFoto(src){
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick=function(){ov.remove();};
+  var img=document.createElement('img');img.src=src;
+  img.style.cssText='max-width:92vw;max-height:92vh;border-radius:8px';
+  ov.appendChild(img);document.body.appendChild(ov);
+}
+function protocoloAdicionarPeca(){
+  _PROTO_PECAS.push({id:Date.now(),descricao:'',servico:'conserto',peso:'',material:'18k',estado:'bom',obs:'',os_id:null});
+  protocoloRenderPecas();
+}
+
+function protocoloRemoverPeca(i){
+  _PROTO_PECAS.splice(i,1);
+  protocoloRenderPecas();
+}
+
+function saveProtocolo(id){
+  var cid=parseInt(document.getElementById('proto-cl')?.value)||null;
+  if(!cid){showToast('Selecione a cliente','danger');return;}
+  if(_PROTO_PECAS.length===0){showToast('Adicione ao menos uma peça','danger');return;}
+  // Sync fields from DOM before save
+  _PROTO_PECAS.forEach(function(pc,i){
+    pc.descricao=document.getElementById('pp-desc-'+i)?.value||pc.descricao;
+    pc.servico=document.getElementById('pp-serv-'+i)?.value||pc.servico;
+    pc.peso=document.getElementById('pp-peso-'+i)?.value||pc.peso;
+    pc.material=document.getElementById('pp-mat-'+i)?.value||pc.material;
+    pc.estado=document.getElementById('pp-est-'+i)?.value||pc.estado;
+    pc.obs=document.getElementById('pp-obs-'+i)?.value||pc.obs;
+    if(!pc.descricao){showToast('Preencha a descrição da peça '+(i+1),'danger');return;}
+  });
+  var invalid=_PROTO_PECAS.some(function(pc){return !pc.descricao;});
+  if(invalid)return;
+
+  var pId=id||DB.nextId('protocolos');
+  var numero=id?(DB.protocolos.find(function(x){return x.id==id;})||{}).numero||gerarNumeroProtocolo():gerarNumeroProtocolo();
+
+  // Auto-generate OS for each piece that doesn't have one yet
+  var atendente=document.getElementById('proto-atendente')?.value||'';
+  _PROTO_PECAS.forEach(function(pc){
+    if(!pc.os_id){
+      var osId=DB.nextId('os');
+      var osStatus=pc.servico==='avaliacao'?'orcamento':'aprovado';
+      DB.os.push({
+        id:osId,
+        origem:'cliente',
+        cliente_id:cid,
+        colecao_atelier_id:null,
+        status:osStatus,
+        prazo:document.getElementById('proto-prazo')?.value||'',
+        priority:'normal',
+        responsavel:atendente,
+        descricao:'[Proto #'+numero+'] '+pc.descricao+(pc.peso?' · '+pc.peso:'')+(pc.obs?' — '+pc.obs:''),
+        fotos:[],
+        orcamento_id:null,
+        protocolo_id:pId
+      });
+      pc.os_id=osId;
+    }
+  });
+
+  var obj={
+    id:pId,
+    numero:numero,
+    data:document.getElementById('proto-data')?.value||today(),
+    hora:document.getElementById('proto-hora')?.value||'',
+    cliente_id:cid,
+    atendente:atendente,
+    status:document.getElementById('proto-status')?.value||'aguardando',
+    prazo:document.getElementById('proto-prazo')?.value||'',
+    obs:document.getElementById('proto-obs')?.value||'',
+    pecas:_PROTO_PECAS.slice()
+  };
+
+  if(id){var idx=DB.protocolos.findIndex(function(x){return x.id==id;});if(idx>=0)DB.protocolos[idx]=obj;}
+  else DB.protocolos.push(obj);
+
+  saveDB();closeModal('modal-proto');
+  showToast('✅ Protocolo '+numero+' salvo — '+_PROTO_PECAS.length+' OS gerada(s)!');
+  navTo('protocolos');
+  // Exibe recibo imediatamente — cliente está aguardando
+  setTimeout(function(){ gerarReciboProtocolo(pId); }, 300);
+}
+
+function excluirProtocolo(id){
+  if(!podeExcluir())return;
+  var p=DB.protocolos.find(function(x){return x.id==id;});
+  if(!p)return;
+  confirmarAcao('Excluir Protocolo?','Protocolo #'+p.numero+' será removido (as OS vinculadas são mantidas).','Excluir',function(){
+    DB.protocolos=DB.protocolos.filter(function(x){return x.id!==id;});
+    saveDB();showToast('Protocolo excluído');
+    renderProtocolos(document.getElementById('content'));
+  });
+}
+
+// ── Recibo para a cliente ──────────────────────────────────────────
+function gerarReciboProtocolo(pid){
+  var p=DB.protocolos.find(function(x){return x.id==pid;});if(!p)return;
+  var at=DB.atelier||{};
+  var cl=DB.clientes.find(function(c){return c.id==p.cliente_id;})||{};
+
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px';
+
+  var wrap=document.createElement('div');
+  wrap.id='recibo-proto-print';
+  wrap.style.cssText='background:#fff;width:148mm;min-height:210mm;padding:12mm 11mm;font-family:Jost,sans-serif;font-size:10.5pt;color:#1a1a2e;box-shadow:0 4px 32px rgba(0,0,0,.4);margin:auto';
+
+  // Header
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0D1F2D;padding-bottom:10px;margin-bottom:12px';
+  var hL=document.createElement('div');
+  hL.innerHTML='<div style="font-family:\'Cormorant Garamond\',serif;font-size:17pt;font-weight:600;color:#0D1F2D;line-height:1">'+(at.nome_fantasia||'Atelier Ana Lobão')+'</div>'
+    +'<div style="font-size:8pt;color:#666;margin-top:2px">Showroom privativo · Joias autorais em ouro 18k</div>'
+    +(at.endereco?'<div style="font-size:8pt;color:#555;margin-top:2px">'+at.endereco+(at.bairro?', '+at.bairro:'')+(at.cidade?' · '+at.cidade+'/'+at.uf:'')+'</div>':'')
+    +(at.tel?'<div style="font-size:8pt;color:#555">'+at.tel+'</div>':'');
+  var hR=document.createElement('div');
+  hR.style.cssText='text-align:right;min-width:120px';
+  hR.innerHTML='<div style="font-family:\'Cormorant Garamond\',serif;font-size:9pt;color:#888;letter-spacing:.06em;text-transform:uppercase">Protocolo de Entrada</div>'
+    +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:22pt;font-weight:700;color:#0D1F2D;line-height:1">#'+p.numero+'</div>'
+    +'<div style="font-size:8pt;color:#666">'+fmtDate(p.data)+(p.hora?' às '+p.hora:'')+'</div>';
+  hdr.appendChild(hL);hdr.appendChild(hR);wrap.appendChild(hdr);
+
+  // Cliente block
+  var clBlock=document.createElement('div');
+  clBlock.style.cssText='background:#f7f5f0;border-radius:6px;padding:9px 12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center';
+  clBlock.innerHTML='<div>'
+    +'<div style="font-size:7.5pt;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Cliente</div>'
+    +'<div style="font-size:13pt;font-weight:600;color:#0D1F2D">'+esc(cl.nome||'—')+'</div>'
+    +(cl.tel?'<div style="font-size:8.5pt;color:#555">'+cl.tel+'</div>':'')
+    +'</div>'
+    +'<div style="text-align:right">'
+    +'<div style="font-size:7.5pt;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">Atendente</div>'
+    +'<div style="font-size:10.5pt;font-weight:500">'+esc(p.atendente||'—')+'</div>'
+    +(p.prazo?'<div style="font-size:8pt;color:#888;margin-top:4px">Contato até '+fmtDate(p.prazo)+'</div>':'')
+    +'</div>';
+  wrap.appendChild(clBlock);
+
+  // Pecas table
+  var tTitle=document.createElement('div');
+  tTitle.style.cssText='font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0D1F2D;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:10px';
+  tTitle.textContent='Peças recebidas';
+  wrap.appendChild(tTitle);
+
+  var table=document.createElement('table');
+  table.style.cssText='width:100%;border-collapse:collapse;margin-bottom:14px;font-size:9.5pt';
+  var thead=document.createElement('thead');
+  thead.innerHTML='<tr style="background:#0D1F2D;color:#B08E56">'
+    +'<th style="padding:6px 8px;text-align:left;font-size:8pt;font-weight:600;letter-spacing:.04em">Nº</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:8pt;font-weight:600;letter-spacing:.04em">Descrição</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:8pt;font-weight:600;letter-spacing:.04em">Serviço</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:8pt;font-weight:600;letter-spacing:.04em">Peso/Qtd</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:8pt;font-weight:600;letter-spacing:.04em">Estado</th>'
+    +'<th style="padding:6px 8px;text-align:left;font-size:8pt;font-weight:600;letter-spacing:.04em">OS</th>'
+    +'</tr>';
+  table.appendChild(thead);
+  var tbody=document.createElement('tbody');
+  (p.pecas||[]).forEach(function(pc,i){
+    var tr=document.createElement('tr');
+    tr.style.cssText='border-bottom:1px solid #eee;'+(i%2===1?'background:#fafafa':'');
+    tr.innerHTML='<td style="padding:7px 8px;font-weight:700;color:#0D1F2D">'+(i+1)+'</td>'
+      +'<td style="padding:7px 8px"><strong>'+esc(pc.descricao)+'</strong>'+(pc.obs?'<br><span style="font-size:8pt;color:#888">'+esc(pc.obs)+'</span>':'')+'</td>'
+      +'<td style="padding:7px 8px">'+esc(SERVICO_LABEL[pc.servico]||pc.servico)+'</td>'
+      +'<td style="padding:7px 8px">'+esc(pc.peso||'—')+'</td>'
+      +'<td style="padding:7px 8px">'+esc(ESTADO_LABEL[pc.estado]||pc.estado)+'</td>'
+      +'<td style="padding:7px 8px;font-weight:600;color:#0D1F2D">'+(pc.os_id?'#'+pc.os_id:'—')+'</td>';
+    // Photos row if any
+    if((pc.fotos||[]).filter(function(f){return f.tipo==='img';}).length>0){
+      var trFoto=document.createElement('tr');
+      trFoto.style.cssText='background:#fdf9f3;border-bottom:1px solid #eee';
+      var tdFoto=document.createElement('td');
+      tdFoto.colSpan=6;tdFoto.style.cssText='padding:6px 8px';
+      tdFoto.innerHTML='<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">'
+        +'<span style="font-size:7.5pt;color:#999;text-transform:uppercase;letter-spacing:.04em;margin-right:4px">Fotos:</span>'
+        +(pc.fotos||[]).filter(function(f){return f.tipo==='img';}).map(function(f){
+          return '<img src="'+f.src+'" style="width:50px;height:50px;object-fit:cover;border-radius:3px;border:1px solid #ddd">';
+        }).join('')
+        +(pc.fotos||[]).filter(function(f){return f.tipo==='pdf';}).map(function(f){
+          return '<span style="font-size:8pt;color:#555">📄 '+esc(f.nome)+'</span>';
+        }).join('')
+        +'</div>';
+      trFoto.appendChild(tdFoto);tbody.appendChild(trFoto);
+    }
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+
+  // Obs
+  if(p.obs){
+    var obsDiv=document.createElement('div');
+    obsDiv.style.cssText='background:#fdf9f3;border-left:3px solid #B08E56;padding:8px 12px;border-radius:0 4px 4px 0;margin-bottom:14px;font-size:9pt';
+    obsDiv.textContent=p.obs;
+    wrap.appendChild(obsDiv);
+  }
+
+  // Próximos passos
+  var prox=document.createElement('div');
+  prox.style.cssText='margin-bottom:16px;border:1px solid #ddd;border-radius:6px;padding:10px 14px';
+  prox.innerHTML='<div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0D1F2D;margin-bottom:6px">Próximos passos</div>'
+    +'<div style="font-size:9.5pt;color:#555">'+(PROTO_STATUS[p.status]||p.status)+'</div>'
+    +(p.prazo?'<div style="font-size:8.5pt;color:#888;margin-top:4px">Prazo de contato: <strong>'+fmtDate(p.prazo)+'</strong></div>':'');
+  wrap.appendChild(prox);
+
+  // Assinaturas
+  var sigs=document.createElement('div');
+  sigs.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:32px;margin-top:auto;padding-top:12px;border-top:1px solid #ddd';
+  function sig(lbl){
+    var d=document.createElement('div');d.style.textAlign='center';
+    var ln=document.createElement('div');ln.style.cssText='border-top:1.5px solid #0D1F2D;margin-bottom:6px;margin-top:36px';
+    var lb=document.createElement('div');lb.style.cssText='font-size:8.5pt;color:#555';lb.textContent=lbl;
+    d.appendChild(ln);d.appendChild(lb);return d;
+  }
+  sigs.appendChild(sig('Assinatura da cliente'));
+  sigs.appendChild(sig((at.nome_fantasia||'Atelier Ana Lobão')));
+  wrap.appendChild(sigs);
+
+  // Rodapé
+  var rod=document.createElement('div');
+  rod.style.cssText='margin-top:12px;text-align:center;font-size:7pt;color:#bbb;border-top:1px solid #eee;padding-top:6px';
+  rod.textContent='Documento gerado em '+fmtDate(today())+' · '+(at.nome_fantasia||'Atelier Ana Lobão')+' · Protocolo '+p.numero;
+  wrap.appendChild(rod);
+
+  // Botões
+  var btnBar=document.createElement('div');
+  btnBar.style.cssText='position:sticky;bottom:0;background:rgba(0,0,0,.85);padding:12px 20px;display:flex;gap:10px;justify-content:center;margin-top:16px;border-radius:8px';
+
+  var btnPrint=document.createElement('button');
+  btnPrint.className='btn btn-primary';btnPrint.style.fontSize='15px';
+  btnPrint.textContent='🖨 Imprimir / Salvar PDF';
+  btnPrint.onclick=function(){
+    var s=document.createElement('style');s.id='prs';
+    s.textContent='@media print{body>*{display:none!important}#recibo-proto-print{display:block!important;position:static!important;box-shadow:none!important;width:148mm!important;min-height:210mm!important;margin:0!important;padding:12mm 11mm!important}}';
+    document.head.appendChild(s);window.print();
+    setTimeout(function(){var x=document.getElementById('prs');if(x)x.remove();},1000);
+  };
+
+  var btnClose=document.createElement('button');
+  btnClose.className='btn btn-outline';btnClose.style.cssText='color:#fff;border-color:#fff';
+  btnClose.textContent='× Fechar';btnClose.onclick=function(){ov.remove();};
+
+  btnBar.appendChild(btnPrint);btnBar.appendChild(btnClose);
+  ov.appendChild(wrap);ov.appendChild(btnBar);
   ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
   document.body.appendChild(ov);
 }
