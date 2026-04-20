@@ -719,6 +719,41 @@ function loadDB(){
       DB.params_reserva.bonus_pct=15;
       saveDB();
     }
+    // v_colecoes: popula coleções do Brand Book se ainda não existirem
+    if(!DB.colecoes_atelier||DB.colecoes_atelier.length===0){
+      DB.colecoes_atelier=[
+        {id:1,nome:'DNA',temporada:'Permanente',status:'ativa',
+         descricao:'O coração da joalheria. Joias que carregam a essência do trabalho: desejo, memória e permanência. Cada peça é única, numerada e irrepetível.',
+         conceito:'Desejo. Nobreza. Autenticidade.',
+         linhas:['Desejo','Nobreza','Autenticidade'],
+         certificacao:'Prime Gems',
+         obs:'Peças com certificado independente, numerado e exclusivo.'},
+        {id:2,nome:'Primeiros Capítulos',temporada:'Permanente',status:'ativa',
+         descricao:'Cada joia celebra o início de uma história. Pulseirinhas de macramê em fio vermelho com ouro 18k, brincos delicados e símbolos afetivos transformam momentos em memórias preciosas.',
+         conceito:'As primeiras memórias também merecem ser eternas.',
+         linhas:[],certificacao:'',obs:'Pulseiras macramê fio vermelho + ouro 18k. Dedicatórias personalizadas.'},
+        {id:3,nome:'Fogo e Flor',temporada:'Permanente',status:'ativa',
+         descricao:'Uma releitura da primeira coleção. O encontro entre o calor do fogo e a delicadeza da flor: dualidade feminina transformada em ouro.',
+         conceito:'Intensidade e suavidade transformadas em joia eterna.',
+         linhas:[],certificacao:'',obs:'Dualidade feminina — força que arde e delicadeza que floresce.'},
+        {id:4,nome:'Desejos Cotidianos',temporada:'Permanente',status:'ativa',
+         descricao:'Desejo é força vital. É intensidade, brilho, pulsação. Na pureza do ouro e na vibração das gemas, nasce uma coleção feita para ser sentida, não apenas usada.',
+         conceito:'Feita para ser sentida, não apenas usada.',
+         linhas:['Frescor','Proteção','Luz','Energia','Força','Intenção'],
+         certificacao:'',obs:'6 linhas temáticas — cada peça com propósito e intenção.'},
+        {id:5,nome:'IRIS',temporada:'Permanente',status:'ativa',
+         descricao:'Íris é o arquétipo do olhar — símbolo de revelação e permanência. Em ouro 18k e gemas raras, cada peça é única, numerada e irrepetível.',
+         conceito:'Eternidade no Olhar.',
+         linhas:[],certificacao:'',obs:'O olhar que se reinventa em cada gema, transformando a luz em permanência.'},
+        {id:6,nome:'Light',temporada:'Permanente',status:'ativa',
+         descricao:'Leveza e luminosidade em ouro 18k. Peças para o cotidiano que carregam a assinatura autoral do atelier.',
+         conceito:'Luz que permanece.',
+         linhas:[],certificacao:'',obs:''}
+      ];
+      if(!DB._ids)DB._ids={};
+      DB._ids.colecoes_atelier=6;
+      saveDB();
+    }
     // v2: elimina cashback_saldo dos clientes (campo redundante — usa calcCashbackCliente())
     if(DB.clientes && DB.clientes.some(cl=>'cashback_saldo' in cl)){
       DB.clientes.forEach(cl=>{ delete cl.cashback_saldo; });
