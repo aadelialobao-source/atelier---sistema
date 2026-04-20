@@ -5360,7 +5360,10 @@ function renderOrcamentos(c){
       return`<tr>
         <td>${fmtDate(o.data)}</td>
         <td><span class="badge ${tipoBadge[o.tipo]||'badge-gray'}">${tipoLabel[o.tipo]||o.tipo}</span></td>
-        <td>${clienteNome(o.cliente_id)}</td>
+        <td>${o.origem==='atelier'
+          ? `<span class="badge badge-gold" style="font-size:10px">✦ Atelier${(DB.colecoes_atelier.find(c=>c.id==o.colecao_atelier_id)||{}).nome?' · '+(DB.colecoes_atelier.find(c=>c.id==o.colecao_atelier_id)||{}).nome:''}</span>`
+          : (o.cliente_id?clienteNome(o.cliente_id):'<span style="color:var(--texto-suave);font-size:12px">Sem cliente</span>')
+        }</td>
         <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.descricao}</td>
         ${verCusto()?`<td>${fmt(custo_total)}</td><td class="fw-600" style="color:var(--verde)">${fmt(preco_ideal)}</td>`:''}
         <td><span class="badge ${o.status==='aprovado'?'badge-green':o.status==='enviado'?'badge-blue':'badge-gray'}">${o.status||'rascunho'}</span></td>
@@ -5569,6 +5572,10 @@ function selectTipoOrc(tipo){
   if(tipo==='produto_pronto'){
     ORC.pp_destino=podeOrcAtelier()?'atelier':'cliente';
   }
+  // Joia Nova → destino padrão = cliente
+  if(tipo==='joia_nova'){
+    ORC.jn_destino='cliente';
+  }
   renderOrcForm();
   setTimeout(_initOrcMidia,80);
 }
@@ -5641,10 +5648,38 @@ function renderOrcForm(){
     </div>
     <div class="form-group" style="grid-column:1/-1"><label>Descrição da Peça</label><input id="orc-desc" placeholder="Ex: Argola Topázio 18k, Medalhão personalizado…"></div>
     `:`
-    <div class="form-group"><label>Cliente</label><select id="orc-cl">
-      ${DB.clientes.map(cl=>`<option value="${cl.id}">${esc(cl.nome)}</option>`).join('')}
-    </select></div>
-    <div class="form-group"><label>Descrição</label><input id="orc-desc" placeholder="Descrição da peça"></div>
+    <div class="form-group" style="grid-column:1/-1">
+      <label>Para quem é esta peça?</label>
+      <div style="display:flex;gap:0;border:1.5px solid #C4BDB4;border-radius:6px;overflow:hidden;margin-top:4px">
+        <button id="jn-dest-cliente" onclick="toggleJNDestino('cliente')"
+          style="flex:1;padding:10px;border:none;font-size:14px;font-family:Jost,sans-serif;cursor:pointer;font-weight:600;transition:.2s;background:${(ORC.jn_destino||'cliente')==='cliente'?'var(--ouro)':'var(--fundo-input)'};color:${(ORC.jn_destino||'cliente')==='cliente'?'#fff':'var(--texto)'}">
+          👤 Cliente
+        </button>
+        <button id="jn-dest-atelier"
+          onclick="${podeOrcAtelier()?"toggleJNDestino('atelier')":"showToast('Acesso restrito — apenas Ana Lobão pode criar orçamentos para a Coleção Atelier','danger')"}"
+          style="flex:1;padding:10px;border:none;border-left:1.5px solid #C4BDB4;font-size:14px;font-family:Jost,sans-serif;cursor:${podeOrcAtelier()?'pointer':'not-allowed'};font-weight:600;transition:.2s;background:${(ORC.jn_destino||'cliente')==='atelier'?'var(--ouro)':'var(--fundo-input)'};color:${(ORC.jn_destino||'cliente')==='atelier'?'#fff':podeOrcAtelier()?'var(--texto)':'var(--texto-suave)'};opacity:${podeOrcAtelier()?1:0.5}">
+          ✦ Coleção do Atelier${podeOrcAtelier()?'':'🔒'}
+        </button>
+      </div>
+    </div>
+    <div id="jn-destino-cliente" style="display:${(ORC.jn_destino||'cliente')==='cliente'?'contents':'none'}">
+      <div class="form-group"><label>Cliente <span style="font-size:11px;color:var(--texto-suave)">(opcional)</span></label>
+        <select id="orc-cl">
+          <option value="">— Sem cliente designado —</option>
+          ${DB.clientes.map(cl=>`<option value="${cl.id}">${esc(cl.nome)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div id="jn-destino-atelier" style="display:${(ORC.jn_destino||'cliente')==='atelier'?'contents':'none'}">
+      <div class="form-group"><label>Coleção do Atelier <span style="font-size:11px;color:var(--texto-suave)">(opcional)</span></label>
+        <select id="jn-colecao-atelier">
+          <option value="">— Peça avulsa do atelier —</option>
+          ${(DB.colecoes_atelier||[]).map(col=>`<option value="${col.id}">${col.nome}${col.temporada?' · '+col.temporada:''}</option>`).join('')}
+        </select>
+      </div>
+      <input type="hidden" id="orc-cl" value="">
+    </div>
+    <div class="form-group" style="grid-column:1/-1"><label>Descrição da Peça</label><input id="orc-desc" placeholder="Ex: Anel solitário 18k · Zircônia 5mm"></div>
     `}
   </div>
   ${ORC.tipo==='joia_nova'?renderOrcJoiaNova():ORC.tipo==='conserto'?renderOrcConserto():ORC.tipo==='produto_pronto'?renderOrcProdutoPronto():renderOrcRessignificar()}
@@ -6224,6 +6259,22 @@ function calcOrc(){
     <div class="price-row"><span>Lucro Líquido Estimado</span><span style="color:${lucro_final>0?'#6fcf97':'#eb5757'};font-weight:600">${fmt(lucro_final)}</span></div>
     <div class="price-row"><span>Margem Líquida Estimada</span><span style="color:${mg>=margem_alvo?'#6fcf97':'#eb5757'};font-weight:600">${fmtN(mg,1)}%</span></div>
     ${btnAprovarHtml}`;
+}
+
+function toggleJNDestino(val){
+  if(val==='atelier'&&!podeOrcAtelier()){
+    showToast('⛔ Apenas Ana Lobão ou designado pode criar orçamentos para a Coleção Atelier','danger');
+    return;
+  }
+  ORC.jn_destino=val;
+  const btnCl=document.getElementById('jn-dest-cliente');
+  const btnAt=document.getElementById('jn-dest-atelier');
+  if(btnCl){btnCl.style.background=val==='cliente'?'var(--ouro)':'var(--fundo-input)';btnCl.style.color=val==='cliente'?'#fff':'var(--texto)';}
+  if(btnAt){btnAt.style.background=val==='atelier'?'var(--ouro)':'var(--fundo-input)';btnAt.style.color=val==='atelier'?'#fff':'var(--texto)';}
+  const elCl=document.getElementById('jn-destino-cliente');
+  const elAt=document.getElementById('jn-destino-atelier');
+  if(elCl)elCl.style.display=val==='cliente'?'contents':'none';
+  if(elAt)elAt.style.display=val==='atelier'?'contents':'none';
 }
 
 function togglePPDestino(val){
@@ -6906,7 +6957,10 @@ function saveOrcamento(){
     ORC.b1.tratamento=document.getElementById('res-trat')?.value||'abater';
   }
   const obj={id:DB.nextId('orcamentos'),tipo:ORC.tipo,
-    cliente_id:cl_el?parseInt(cl_el.value):null,
+    cliente_id:(ORC.jn_destino==='atelier')?null:(cl_el?parseInt(cl_el.value)||null:null),
+    origem:(ORC.jn_destino==='atelier')?'atelier':undefined,
+    colecao_atelier_id:(ORC.jn_destino==='atelier')?(parseInt(document.getElementById('jn-colecao-atelier')?.value)||null):null,
+    jn_destino:ORC.jn_destino||'cliente',
     descricao:desc_el.value,data:today(),status:'rascunho',
     params:{...ORC.params},bloco1:{...ORC.b1,gemas:[...ORC.b1.gemas]},
     bloco2:{items:[...(ORC.b2_items||[])]},bloco3:{...ORC.b3},
@@ -6938,7 +6992,7 @@ function editOrcamento(id){
   const desenhoConvert=(orc.desenhos||[]).map(f=>typeof f==='string'?{tipo:'img',src:f,nome:'desenho'}:f);
   midiaInit('orc_desenho', desenhoConvert);
   const b2saved = o.bloco2||{};
-  ORC={tipo:o.tipo,params:{...o.params},
+  ORC={tipo:o.tipo,jn_destino:o.jn_destino||'cliente',params:{...o.params},
     b1:{...o.bloco1,gemas:[...(o.bloco1?.gemas||[])],insumos_orc:[...(o.bloco1?.insumos_orc||[])]},
     b2:{},b2_items:Array.isArray(b2saved.items)?[...b2saved.items]:[],
     b3:{...o.bloco3},fotos:[],
