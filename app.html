@@ -444,7 +444,44 @@ const DB = {
     {id:1,nome:'Anel Solitário Zircônia',descricao:'Ouro 18k, zircônia 5mm',peso:3.2,metal:'18k',preco:1890,estoque:2,fotos:[],colecao_atelier_id:null},
     {id:2,nome:'Gargantilha Veneziana',descricao:'Ouro 18k 40cm',peso:5.8,metal:'18k',preco:3200,estoque:1,fotos:[],colecao_atelier_id:null},
   ],
-  colecoes_atelier:[],
+  colecoes_atelier:[
+    {id:1, nome:'DNA', temporada:'Permanente', status:'ativa',
+     descricao:'O coração da joalheria. Joias que carregam a essência do trabalho: desejo, memória e permanência. Cada peça é única, numerada e irrepetível.',
+     conceito:'Desejo. Nobreza. Autenticidade.',
+     linhas:['Desejo','Nobreza','Autenticidade'],
+     certificacao:'Prime Gems',
+     obs:'Peças com certificado independente, numerado e exclusivo.'},
+    {id:2, nome:'Primeiros Capítulos', temporada:'Permanente', status:'ativa',
+     descricao:'Cada joia celebra o início de uma história. Pulseirinhas de macramê em fio vermelho com ouro 18k, brincos delicados e símbolos afetivos transformam momentos em memórias preciosas.',
+     conceito:'As primeiras memórias também merecem ser eternas.',
+     linhas:[],
+     certificacao:'',
+     obs:'Pulseiras macramê fio vermelho + ouro 18k. Dedicatórias personalizadas.'},
+    {id:3, nome:'Fogo e Flor', temporada:'Permanente', status:'ativa',
+     descricao:'Uma releitura da primeira coleção. O encontro entre o calor do fogo e a delicadeza da flor: dualidade feminina transformada em ouro.',
+     conceito:'Intensidade e suavidade transformadas em joia eterna.',
+     linhas:[],
+     certificacao:'',
+     obs:'Dualidade feminina — força que arde e delicadeza que floresce.'},
+    {id:4, nome:'Desejos Cotidianos', temporada:'Permanente', status:'ativa',
+     descricao:'Desejo é força vital. É intensidade, brilho, pulsação. Na pureza do ouro e na vibração das gemas, nasce uma coleção feita para ser sentida, não apenas usada.',
+     conceito:'Feita para ser sentida, não apenas usada.',
+     linhas:['Frescor','Proteção','Luz','Energia','Força','Intenção'],
+     certificacao:'',
+     obs:'6 linhas temáticas — cada peça com propósito e intenção.'},
+    {id:5, nome:'IRIS', temporada:'Permanente', status:'ativa',
+     descricao:'Íris é o arquétipo do olhar — símbolo de revelação e permanência. Em ouro 18k e gemas raras, cada peça é única, numerada e irrepetível.',
+     conceito:'Eternidade no Olhar.',
+     linhas:[],
+     certificacao:'',
+     obs:'O olhar que se reinventa em cada gema, transformando a luz em permanência.'},
+    {id:6, nome:'Light', temporada:'Permanente', status:'ativa',
+     descricao:'Leveza e luminosidade em ouro 18k. Peças para o cotidiano que carregam a assinatura autoral do atelier.',
+     conceito:'Luz que permanece.',
+     linhas:[],
+     certificacao:'',
+     obs:''},
+  ],
   financeiro:[
     {id:1,data:'2026-01-15',tipo:'entrada',categoria:'Venda',descricao:'Brincos folha + pingente',valor:4200,forma:'PIX'},
     {id:2,data:'2026-01-18',tipo:'saida',categoria:'Insumo',descricao:'Compra ouro 18k 10g',valor:5119.60,forma:'TED'},
@@ -488,7 +525,7 @@ const DB = {
   personal_stylers:[
     {id:1,nome:'Anna Karla',comissao_pct:10,ativo:true,tel:'',obs:'Personal Styler parceira — comissão em vendas onde monta o look',historico_pagamentos:[]}
   ],
-  _ids:{clientes:4,recebimentos:3,os:104,etapas:4,qc:2,orcamentos:2,propostas:2,entradas_ouro:2,vendas_credito:3,insumos:8,colecao:3,colecoes_atelier:0,financeiro:4,vendas:4,colaboradores:7,metas:3,cashback:2,uso_insumos_os:3,movimentos_estoque:1,datas_importantes:4,romaneios:0,equipes:1,personal_stylers:1,lotes_montagem:0,despesas:0,despesas_recorrentes:0},
+  _ids:{clientes:4,recebimentos:3,os:104,etapas:4,qc:2,orcamentos:2,propostas:2,entradas_ouro:2,vendas_credito:3,insumos:8,colecao:3,colecoes_atelier:6,financeiro:4,vendas:4,colaboradores:7,metas:3,cashback:2,uso_insumos_os:3,movimentos_estoque:1,datas_importantes:4,romaneios:0,equipes:1,personal_stylers:1,lotes_montagem:0,despesas:0,despesas_recorrentes:0},
   nextId(t){this._ids[t]=(this._ids[t]||0)+1;return this._ids[t];}
 };
 
@@ -4735,7 +4772,8 @@ function renderColecao(c){
         <div style="display:flex;align-items:center;gap:12px;flex:1">
           <div>
             <p style="font-family:'Cormorant Garamond',serif;font-size:19px;color:#fff;font-weight:500">${col.nome}</p>
-            <p style="font-size:12px;color:rgba(176,142,86,.8)">${col.temporada||''} ${col.descricao?'· '+col.descricao.substring(0,50):''}</p>
+            <p style="font-size:12px;color:rgba(176,142,86,.8)">${col.temporada||''} ${col.conceito?'· '+col.conceito:col.descricao?'· '+col.descricao.substring(0,60)+'…':''}</p>
+            ${col.linhas&&col.linhas.length?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${col.linhas.map(l=>`<span style="font-size:10px;background:rgba(176,142,86,.2);color:rgba(176,142,86,.9);padding:2px 7px;border-radius:10px">${l}</span>`).join('')}</div>`:''}
           </div>
           <span class="badge ${COL_STATUS_BADGE[col.status]||'badge-gray'}" style="margin-left:8px">${COL_STATUS_LABEL[col.status]||col.status}</span>
         </div>
@@ -4835,8 +4873,14 @@ function openColecaoModal(id){
           <select id="col-status">
             ${Object.entries(COL_STATUS_LABEL).map(([k,v])=>`<option value="${k}" ${(col.status||'planejamento')===k?'selected':''}>${v}</option>`).join('')}
           </select></div>
-        <div class="form-group" style="grid-column:1/-1"><label>Descrição / Conceito</label>
-          <textarea id="col-desc" rows="2" placeholder="Inspiração, tema, materiais predominantes…">${col.descricao||''}</textarea></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Descrição</label>
+          <textarea id="col-desc" rows="2" placeholder="Inspiração, materiais predominantes, público…">${col.descricao||''}</textarea></div>
+        <div class="form-group" style="grid-column:1/-1"><label>Conceito / Tagline</label>
+          <input id="col-conceito" value="${(col.conceito||'').replace(/"/g,'&quot;')}" placeholder="ex: Eternidade no Olhar · Criamos o que permanece…"></div>
+        <div class="form-group"><label>Linhas internas <span style="font-size:11px;color:var(--texto-suave)">(separadas por vírgula)</span></label>
+          <input id="col-linhas" value="${(col.linhas||[]).join(', ')}" placeholder="ex: Desejo, Nobreza, Autenticidade"></div>
+        <div class="form-group"><label>Certificação</label>
+          <input id="col-cert" value="${col.certificacao||''}" placeholder="ex: Prime Gems, GIA…"></div>
       </div>
       <fieldset style="margin-top:14px">
         <legend>📎 Imagens da Coleção</legend>
@@ -4864,6 +4908,9 @@ function saveColecaoAtelier(id){
     data_lancamento:document.getElementById('col-lancamento')?.value||'',
     status:document.getElementById('col-status')?.value||'planejamento',
     descricao:document.getElementById('col-desc')?.value||'',
+    conceito:document.getElementById('col-conceito')?.value||'',
+    linhas:(document.getElementById('col-linhas')?.value||'').split(',').map(s=>s.trim()).filter(Boolean),
+    certificacao:document.getElementById('col-cert')?.value||'',
     fotos:midiaGet('col_capa').slice()
   };
   if(id){const i=DB.colecoes_atelier.findIndex(x=>x.id==id);if(i>=0)DB.colecoes_atelier[i]=obj;else DB.colecoes_atelier.push(obj);}
@@ -5357,9 +5404,10 @@ function renderOrcamentos(c){
       const preco_ideal=o.preco_aprovado||o.preco_direto||(custo_total*(b3.markup||3.2));
       const tipoBadge={joia_nova:'badge-gold',conserto:'badge-blue',ressignificar:'badge-green',produto_pronto:'badge-gray'};
       const tipoLabel={joia_nova:'✦ Joia Nova',conserto:'◈ Conserto',ressignificar:'◇ Ressignificar',produto_pronto:'◻ Produto Pronto'};
+      const tipoLabelFull=o.origem==='atelier'&&o.tipo==='joia_nova'?'✦ JN · Coleção':tipoLabel[o.tipo]||o.tipo;
       return`<tr>
         <td>${fmtDate(o.data)}</td>
-        <td><span class="badge ${tipoBadge[o.tipo]||'badge-gray'}">${tipoLabel[o.tipo]||o.tipo}</span></td>
+        <td><span class="badge ${tipoBadge[o.tipo]||'badge-gray'}">${tipoLabelFull}</span></td>
         <td>${o.origem==='atelier'
           ? `<span class="badge badge-gold" style="font-size:10px">✦ Atelier${(DB.colecoes_atelier.find(c=>c.id==o.colecao_atelier_id)||{}).nome?' · '+(DB.colecoes_atelier.find(c=>c.id==o.colecao_atelier_id)||{}).nome:''}</span>`
           : (o.cliente_id?clienteNome(o.cliente_id):'<span style="color:var(--texto-suave);font-size:12px">Sem cliente</span>')
@@ -6989,10 +7037,10 @@ function editOrcamento(id){
     return f;
   });
   midiaInit('orc', fotosConvertidas);
-  const desenhoConvert=(orc.desenhos||[]).map(f=>typeof f==='string'?{tipo:'img',src:f,nome:'desenho'}:f);
+  const desenhoConvert=(o.desenhos||[]).map(f=>typeof f==='string'?{tipo:'img',src:f,nome:'desenho'}:f);
   midiaInit('orc_desenho', desenhoConvert);
   const b2saved = o.bloco2||{};
-  ORC={tipo:o.tipo,jn_destino:o.jn_destino||'cliente',params:{...o.params},
+  ORC={tipo:o.tipo,jn_destino:o.jn_destino||(o.origem==='atelier'?'atelier':'cliente'),pp_destino:o.pp_destino||(o.origem==='atelier'?'atelier':'cliente'),params:{...o.params},
     b1:{...o.bloco1,gemas:[...(o.bloco1?.gemas||[])],insumos_orc:[...(o.bloco1?.insumos_orc||[])]},
     b2:{},b2_items:Array.isArray(b2saved.items)?[...b2saved.items]:[],
     b3:{...o.bloco3},fotos:[],
@@ -7015,8 +7063,25 @@ function editOrcamento(id){
         setTimeout(calcProdutoPronto,80);
         calcProdutoPronto();
       } else if(ORC.tipo==='joia_nova'){
+        // Restaura toggle destino (cliente/atelier) sem perder o visual
+        if(ORC.jn_destino==='atelier'){
+          toggleJNDestino('atelier');
+          const jnCol=document.getElementById('jn-colecao-atelier');
+          if(jnCol&&o.colecao_atelier_id) jnCol.value=o.colecao_atelier_id;
+        } else {
+          const cl2=document.getElementById('orc-cl');
+          if(cl2) cl2.value=o.cliente_id||'';
+        }
         const insL=document.getElementById('ins-orc-list');if(insL)insL.innerHTML=renderInsumosOrcForm();
         const b2L=document.getElementById('b2-list');if(b2L)b2L.innerHTML=renderExpForm();
+        // Restaura campos numéricos do b1
+        const eb1ptotal=document.getElementById('b1-ptotal');if(eb1ptotal)eb1ptotal.value=o.bloco1?.peso_total||0;
+        const eb1pouro=document.getElementById('b1-pouro');if(eb1pouro)eb1pouro.value=o.bloco1?.peso_ouro||0;
+        const eb1mdo=document.getElementById('b1-mdo');if(eb1mdo)eb1mdo.value=o.bloco1?.mao_obra||0;
+        const eb1mdo2=document.getElementById('b1-mdo2');if(eb1mdo2)eb1mdo2.value=o.bloco1?.mao_obra2||0;
+        // Restaura b3
+        const eb3mk=document.getElementById('b3-markup');if(eb3mk)eb3mk.value=o.bloco3?.markup||3.2;
+        const eb3ma=document.getElementById('b3-margem-alvo');if(eb3ma)eb3ma.value=o.bloco3?.margem_alvo||25;
         calcOrc();
       } else if(ORC.tipo==='conserto'){
         // Restaurar campos do formulário de conserto a partir do ORC.b1 salvo
