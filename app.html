@@ -1966,10 +1966,7 @@ function renderDashboard(c){
   <div class="page-header">
     <div><p class="page-title">Bom dia ✦</p><p class="page-sub">Visão geral do atelier</p></div>
     <div style="display:flex;align-items:center;gap:10px">
-      ${podeAbrirCaixa()?`<button class="btn btn-primary" onclick="navTo('caixa')" style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:16px">${DB.caixa&&DB.caixa.status==='aberto'?'🟢':'⊡'}</span>
-        ${DB.caixa&&DB.caixa.status==='aberto'?'Caixa Aberto':'Abrir Caixa'}
-      </button>`:''}
+      ${podeAbrirCaixa()?('<button class="btn btn-primary" onclick="navTo(\'caixa\')" style="display:flex;align-items:center;gap:6px"><span style="font-size:16px">'+(DB.caixa&&DB.caixa.status==='aberto'?'🟢':'⊡')+'</span>'+(DB.caixa&&DB.caixa.status==='aberto'?'Caixa Aberto':'Abrir Caixa')+'</button>'):''}
       <span class="text-suave" style="font-size:12px">${new Date().toLocaleDateString('pt-BR',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</span>
     </div>
   </div>
