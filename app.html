@@ -1883,6 +1883,7 @@ function renderDashboard(c){
     return !DB.qc.find(q=>q.os_id===e.os_id&&q.resultado==='aprovado');
   });
   const osSemQC=[...new Set(etapasConcluSemQC.map(e=>e.os_id))];
+  let alertaHTML='';
 
     // ── Alertas: aniversário, casamento e presenteados do cadastro rápido ──
   const hoje30 = new Date(); hoje30.setDate(hoje30.getDate()+30);
