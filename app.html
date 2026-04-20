@@ -2599,10 +2599,11 @@ function renderOS(c){
           <div class="kanban-card" onclick="openOSModal(${o.id})">
             <div class="kanban-card-title">#${o.id} · ${o.descricao.substring(0,40)}${o.descricao.length>40?'…':''}</div>
             <div class="kanban-card-sub">${o.origem==='atelier'?`🏛 ${(DB.colecoes_atelier.find(c=>c.id==o.colecao_atelier_id)||{}).nome||'Coleção Atelier'}`:clienteNome(o.cliente_id)}</div>
-            <div class="kanban-card-sub" style="margin-top:4px;display:flex;gap:8px;align-items:center">
+            <div class="kanban-card-sub" style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               ${o.origem==='atelier'?`<span class="badge badge-gold" style="font-size:10px">✦ Atelier</span>`:''}
               <span class="badge ${o.priority==='alta'?'badge-red':'badge-gray'}">${o.priority||'normal'}</span>
               ${o.prazo?`<span style="font-size:11px;color:var(--texto-suave)">⏰ ${fmtDate(o.prazo)}</span>`:''}
+              ${o.orcamento_id?`<span onclick="event.stopPropagation();editOrcamento(${o.orcamento_id})" style="font-size:10px;background:var(--azul);color:var(--ouro-claro);padding:2px 7px;border-radius:10px;cursor:pointer" title="Orçamento vinculado">📋 Orc. #${o.orcamento_id}</span>`:''}
             </div>
           </div>`).join('')||`<p style="font-size:12px;color:var(--texto-suave);text-align:center;padding:16px">Vazio</p>`}
       </div>
@@ -2638,9 +2639,16 @@ function openOSModal(id, preColecaoId){
       <!-- Seletor de cliente (condicional) -->
       <div id="os-cliente-area" style="${origemAtelier?'display:none':''}">
         <div class="form-group" style="margin-bottom:14px"><label>Cliente</label>
-          <select id="os-cl">
+          <select id="os-cl" onchange="osAtualizarOrcamentos(this.value)">
             <option value="">— Sem cliente —</option>
             ${DB.clientes.map(cl=>`<option value="${cl.id}" ${o.cliente_id==cl.id?'selected':''}>${cl.nome}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom:14px" id="os-orc-area">
+          <label>Vincular a Orçamento <span style="font-size:11px;color:var(--texto-suave)">(opcional)</span></label>
+          <select id="os-orc">
+            <option value="">— Nenhum —</option>
+            ${(o.cliente_id?DB.orcamentos.filter(x=>x.cliente_id==o.cliente_id):DB.orcamentos).map(x=>`<option value="${x.id}" ${o.orcamento_id==x.id?'selected':''}>#${x.id} · ${x.descricao||x.tipo} (${x.status||'rascunho'})</option>`).join('')}
           </select>
         </div>
       </div>
@@ -2694,6 +2702,138 @@ function osToggleOrigem(val){
   if(ca)ca.style.display=val==='cliente'?'':'none';
   if(coa)coa.style.display=val==='atelier'?'':'none';
 }
+function criarOSDeOrcamento(orcId){
+  var orc=DB.orcamentos.find(function(x){return x.id==orcId;});
+  if(!orc)return;
+  var cl=orc.cliente_id?DB.clientes.find(function(c){return c.id==orc.cliente_id;}):null;
+  var ov=document.createElement('div');
+  ov.className='modal-overlay';ov.id='modal-os-cria';
+
+  var box=document.createElement('div');box.className='modal modal-lg';
+
+  // Header
+  var hdr=document.createElement('div');hdr.className='modal-header';
+  var htitle=document.createElement('span');htitle.className='modal-title';
+  htitle.textContent='Nova OS — Orçamento #'+orcId;
+  var hclose=document.createElement('button');hclose.className='modal-close';
+  hclose.textContent='×';hclose.onclick=function(){closeModal('modal-os-cria');};
+  hdr.appendChild(htitle);hdr.appendChild(hclose);
+
+  // Body
+  var body=document.createElement('div');body.className='modal-body';
+
+  // Banner
+  var banner=document.createElement('div');
+  banner.style.cssText='background:rgba(176,142,86,.08);border:1px solid var(--borda-ouro);border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:13px';
+  banner.innerHTML='<strong>Orçamento #'+orcId+'</strong>: '+esc(orc.descricao||orc.tipo||'')+(cl?' · '+esc(cl.nome):'');
+  body.appendChild(banner);
+
+  // Cliente select
+  var cgr=document.createElement('div');cgr.className='form-group';cgr.style.marginBottom='14px';
+  var clbl=document.createElement('label');clbl.textContent='Cliente';
+  var csel=document.createElement('select');csel.id='os-cria-cl';
+  var copt0=document.createElement('option');copt0.value='';copt0.textContent='— Sem cliente —';csel.appendChild(copt0);
+  DB.clientes.forEach(function(c){
+    var opt=document.createElement('option');opt.value=c.id;opt.textContent=c.nome;
+    if(orc.cliente_id==c.id)opt.selected=true;
+    csel.appendChild(opt);
+  });
+  cgr.appendChild(clbl);cgr.appendChild(csel);body.appendChild(cgr);
+
+  // Orçamento select (pre-selected)
+  var ogr=document.createElement('div');ogr.className='form-group';ogr.style.marginBottom='14px';
+  var olbl=document.createElement('label');olbl.textContent='Orçamento vinculado';
+  var osel=document.createElement('select');osel.id='os-cria-orc';
+  var oopt0=document.createElement('option');oopt0.value='';oopt0.textContent='— Nenhum —';osel.appendChild(oopt0);
+  DB.orcamentos.forEach(function(x){
+    var opt=document.createElement('option');opt.value=x.id;
+    opt.textContent='#'+x.id+' · '+(x.descricao||x.tipo||'')+(x.status?' ('+x.status+')':'');
+    if(x.id==orcId)opt.selected=true;
+    osel.appendChild(opt);
+  });
+  ogr.appendChild(olbl);ogr.appendChild(osel);body.appendChild(ogr);
+
+  // Grid: status, prazo, prioridade, responsavel
+  var grid=document.createElement('div');grid.className='form-grid';grid.style.gap='14px';
+
+  function mkSel(id,lbl,opts,defVal){
+    var g=document.createElement('div');g.className='form-group';
+    var l=document.createElement('label');l.textContent=lbl;
+    var s=document.createElement('select');s.id=id;
+    opts.forEach(function(o){
+      var op=document.createElement('option');op.value=o.v;op.textContent=o.t;
+      if(o.v===defVal)op.selected=true;s.appendChild(op);
+    });
+    g.appendChild(l);g.appendChild(s);return g;
+  }
+  function mkInput(id,lbl,type,ph){
+    var g=document.createElement('div');g.className='form-group';
+    var l=document.createElement('label');l.textContent=lbl;
+    var inp=document.createElement('input');inp.id=id;inp.type=type||'text';if(ph)inp.placeholder=ph;
+    g.appendChild(l);g.appendChild(inp);return g;
+  }
+
+  grid.appendChild(mkSel('os-cria-status','Status',[
+    {v:'orcamento',t:'Orçamento'},{v:'aprovado',t:'Aprovado'},{v:'producao',t:'Em Produção'}
+  ],'aprovado'));
+  grid.appendChild(mkInput('os-cria-prazo','Prazo','date',''));
+  grid.appendChild(mkSel('os-cria-prior','Prioridade',[
+    {v:'normal',t:'Normal'},{v:'alta',t:'Alta'},{v:'urgente',t:'Urgente'}
+  ],'normal'));
+  grid.appendChild(mkInput('os-cria-resp','Responsável','text','Colaborador responsável'));
+  body.appendChild(grid);
+
+  // Descrição
+  var dg=document.createElement('div');dg.className='form-group mt-12';
+  var dl=document.createElement('label');dl.textContent='Descrição *';
+  var dt=document.createElement('textarea');dt.id='os-cria-desc';dt.rows=3;
+  dt.value=orc.descricao||'';
+  dg.appendChild(dl);dg.appendChild(dt);body.appendChild(dg);
+
+  // Footer
+  var footer=document.createElement('div');footer.className='modal-footer';
+  var btnCancel=document.createElement('button');btnCancel.className='btn btn-outline';
+  btnCancel.textContent='Cancelar';btnCancel.onclick=function(){closeModal('modal-os-cria');};
+  var btnOk=document.createElement('button');btnOk.className='btn btn-primary';
+  btnOk.textContent='✦ Criar OS';btnOk.onclick=salvarOSDeOrcamento;
+
+  footer.appendChild(btnCancel);footer.appendChild(btnOk);
+  box.appendChild(hdr);box.appendChild(body);box.appendChild(footer);
+  ov.appendChild(box);
+  ov.addEventListener('click',function(e){if(e.target===ov)closeModal('modal-os-cria');});
+  document.body.appendChild(ov);
+}
+
+function salvarOSDeOrcamento(){
+  var desc=(document.getElementById('os-cria-desc')?.value||'').trim();
+  if(!desc){showToast('Descrição obrigatória','danger');return;}
+  var obj={
+    id:DB.nextId('os'),origem:'cliente',
+    cliente_id:parseInt(document.getElementById('os-cria-cl')?.value)||null,
+    colecao_atelier_id:null,
+    status:document.getElementById('os-cria-status')?.value||'aprovado',
+    prazo:document.getElementById('os-cria-prazo')?.value||'',
+    priority:document.getElementById('os-cria-prior')?.value||'normal',
+    responsavel:document.getElementById('os-cria-resp')?.value||'',
+    descricao:desc,
+    fotos:[],
+    orcamento_id:parseInt(document.getElementById('os-cria-orc')?.value)||null
+  };
+  DB.os.push(obj);
+  saveDB();closeModal('modal-os-cria');
+  showToast('OS #'+obj.id+' criada e vinculada ao Orçamento #'+obj.orcamento_id+' ✅');
+  navTo('os');
+}
+function osAtualizarOrcamentos(cidStr){
+  var cid=parseInt(cidStr)||null;
+  var sel=document.getElementById('os-orc');if(!sel)return;
+  var prev=sel.value;
+  var list=cid?DB.orcamentos.filter(function(x){return x.cliente_id==cid;}):DB.orcamentos;
+  sel.innerHTML='<option value="">— Nenhum —</option>'
+    +list.map(function(x){
+      return '<option value="'+x.id+'"'+(String(prev)==String(x.id)?' selected':'')+'>#'+x.id+' · '+(x.descricao||x.tipo)+' ('+(x.status||'rascunho')+')</option>';
+    }).join('');
+}
 function saveOS(id){
   const origemRadio=document.querySelector('input[name="os-origem"]:checked');
   const origem=origemRadio?origemRadio.value:'cliente';
@@ -2712,7 +2852,8 @@ function saveOS(id){
     priority:document.getElementById('os-prior')?.value||'normal',
     responsavel:document.getElementById('os-resp')?.value||'',
     descricao:desc,
-    fotos:midiaGet('os').slice()
+    fotos:midiaGet('os').slice(),
+    orcamento_id:parseInt(document.getElementById('os-orc')?.value)||null
   };
   if(id){const i=DB.os.findIndex(o=>o.id==id);if(i>=0)DB.os[i]=obj;}else DB.os.push(obj);
   saveDB();closeModal('modal-os');showToast('OS salva');renderOS(document.getElementById('content'));
@@ -3496,6 +3637,28 @@ function editColecao(id){
           <select id="ec-colecao">${colOpts}</select></div>
       </div>
     </div>
+    </div>
+    <!-- Certificados -->
+    <div class="modal-body" style="border-top:1px solid var(--borda);padding-top:16px">
+      <p style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--azul);margin-bottom:4px">📎 Certificado</p>
+      <div class="form-grid" style="gap:12px;margin-bottom:12px">
+        <div class="form-group"><label>Laboratório</label>
+          <select id="ec-lab">
+            <option value="Nenhum" ${(!p.lab_cert||p.lab_cert==='Nenhum')?'selected':''}>Nenhum</option>
+            ${['Prime Gems','IGI','GIA','IBGem','Outro'].map(l=>`<option ${p.lab_cert===l?'selected':''}>${l}</option>`).join('')}
+          </select></div>
+        <div class="form-group"><label>Nº Certificado</label>
+          <input id="ec-ncert" value="${p.num_cert||''}" placeholder="Número do laudo"></div>
+        <div class="form-group"><label>Garantia</label>
+          <input id="ec-garantia" value="${p.garantia||''}" placeholder="12 meses polimento"></div>
+      </div>
+      <div id="ec-cert-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+      <input type="file" id="ec-cert-input" accept="image/*,.pdf" multiple style="display:none"
+        onchange="certProdAdicionarArquivos(event)">
+      <button type="button" class="btn btn-sm btn-outline"
+        onclick="document.getElementById('ec-cert-input').click()">📎 Anexar Imagem ou PDF</button>
+      <span style="font-size:11px;color:var(--texto-suave);margin-left:8px">JPG, PNG ou PDF · máx. 3 · 5 MB</span>
+    </div>
     <div class="modal-footer">
       ${podeExcluir()?`<button class="btn btn-danger" onclick="excluirColecao(${id});closeModal('modal-edit-col')">Excluir</button>`:''}
       <button class="btn btn-outline" onclick="closeModal('modal-edit-col')">Cancelar</button>
@@ -3503,6 +3666,31 @@ function editColecao(id){
     </div>
   </div>`;
   document.body.appendChild(div);
+  // Load existing certs into the prod buffer and render in ec-cert-preview
+  _CERT_PROD = (p.certificados||[]).slice();
+  (function syncEcPreview(){
+    var el=document.getElementById('ec-cert-preview');
+    if(!el){setTimeout(syncEcPreview,30);return;}
+    // Reuse certProdRenderPreview but target ec-cert-preview
+    el.innerHTML=_CERT_PROD.map(function(m,i){
+      if(m.tipo==='pdf'){
+        return '<div style="display:flex;align-items:center;gap:8px;background:var(--fundo);border:1px solid var(--borda);border-radius:6px;padding:8px 12px;margin-bottom:6px">'
+          +'<span style="font-size:22px">📄</span><div style="flex:1;min-width:0">'
+          +'<p style="font-size:12px;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m.nome)+'</p>'
+          +'<a href="'+m.src+'" target="_blank" style="font-size:11px;color:var(--ouro)">Abrir PDF</a></div>'
+          +'<button type="button" onclick="certProdRemover('+i+');(function(){var e=document.getElementById(\'ec-cert-preview\');if(e)certProdRenderPreviewIn(e);})()" style="background:none;border:none;color:#eb5757;font-size:18px;cursor:pointer">×</button>'
+          +'</div>';
+      }
+      return '<div style="position:relative;display:inline-block;margin:0 6px 6px 0">'
+        +'<img src="'+m.src+'" style="width:90px;height:90px;object-fit:cover;border-radius:6px;border:1px solid var(--borda)">'
+        +'<div style="font-size:10px;color:var(--texto-suave);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">'+esc(m.nome)+'</div>'
+        +'<button type="button" onclick="certProdRemover('+i+');(function(){var e=document.getElementById(\'ec-cert-preview\');if(e)certProdRenderPreviewIn(e);})()" style="position:absolute;top:-6px;right:-6px;background:#eb5757;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1">×</button>'
+        +'</div>';
+    }).join('')||'<p style="font-size:12px;color:var(--texto-suave)">Nenhum certificado.</p>';
+    // Wire the input to also update ec-cert-preview
+    var inp=document.getElementById('ec-cert-input');
+    if(inp) inp.onchange=function(e){certProdAdicionarArquivos(e);(function(){var el2=document.getElementById('ec-cert-preview');if(el2)certProdRenderPreviewIn(el2);})();};
+  })();
 }
 function saveEditColecao(id){
   const i=DB.colecao.findIndex(p=>p.id==id);if(i<0)return;
@@ -3516,7 +3704,11 @@ function saveEditColecao(id){
     estoque:parseInt(document.getElementById('ec-estoque')?.value)||0,
     peso:parseFloat(document.getElementById('ec-peso')?.value)||0,
     metal:document.getElementById('ec-metal')?.value||'18k',
-    colecao_atelier_id:colId
+    colecao_atelier_id:colId,
+    lab_cert:document.getElementById('ec-lab')?.value||'',
+    num_cert:document.getElementById('ec-ncert')?.value||'',
+    garantia:document.getElementById('ec-garantia')?.value||'',
+    certificados:(_CERT_PROD||[]).slice()
   };
   saveDB();closeModal('modal-edit-col');
   showToast('Peça atualizada');renderColecao(document.getElementById('content'));
@@ -3570,10 +3762,23 @@ function renderProduto(c){
       </div>
       <div id="pt-cert" class="tab-pane">
         <div class="form-grid" style="gap:14px">
-          <div class="form-group"><label>Laboratório</label><select id="pt-lab"><option>Nenhum</option><option>Prime Gems</option><option>IGI</option><option>GIA</option></select></div>
+          <div class="form-group"><label>Laboratório</label>
+            <select id="pt-lab"><option>Nenhum</option><option>Prime Gems</option><option>IGI</option><option>GIA</option><option>IBGem</option><option>Outro</option></select></div>
           <div class="form-group"><label>Nº Certificado</label><input id="pt-ncert" placeholder="Número do laudo"></div>
           <div class="form-group"><label>Garantia</label><input id="pt-garantia" placeholder="12 meses polimento"></div>
         </div>
+        <fieldset style="margin-top:16px;border:1px solid var(--borda-ouro);border-radius:6px;padding:14px 16px">
+          <legend style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--ouro);padding:0 8px;font-weight:500">📎 Arquivo do Certificado</legend>
+          <p style="font-size:12px;color:var(--texto-suave);margin-bottom:10px">Anexe a imagem ou PDF do laudo de autenticidade (máx. 3 arquivos · 5 MB cada).</p>
+          <div id="cert-prod-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px"></div>
+          <input type="file" id="cert-prod-input" accept="image/*,.pdf" multiple style="display:none"
+            onchange="certProdAdicionarArquivos(event)">
+          <button type="button" class="btn btn-sm btn-outline"
+            onclick="document.getElementById('cert-prod-input').click()">
+            📎 Anexar Imagem ou PDF
+          </button>
+          <span style="font-size:11px;color:var(--texto-suave);margin-left:10px">JPG, PNG ou PDF</span>
+        </fieldset>
       </div>
       <div id="pt-midia" class="tab-pane">
         <fieldset style="border:1px solid var(--borda-ouro);border-radius:6px;padding:14px 16px;margin-bottom:8px">
@@ -3587,9 +3792,11 @@ function renderProduto(c){
     </div>
   </div>`;
   midiaInit('prod',[]);
+  _CERT_PROD=[];  // reset certificate buffer for new product
   setTimeout(function(){
     var pm=document.getElementById('prod-midia-container');
     if(pm){pm.innerHTML=midiaWidget('prod',8,'Inserir Imagem / Vídeo');midiaRenderPreview('prod');}
+    certProdRenderPreview();
   },50);
 }
 function switchTabById(e,target){
@@ -3601,6 +3808,74 @@ function switchTabById(e,target){
   const pane=container.querySelector('#'+target);
   if(pane)pane.classList.add('active');
 }
+// ── Certificados de Peça (buffer dedicado) ───────────────────────
+var _CERT_PROD = [];
+function certProdAdicionarArquivos(e){
+  var files = Array.from(e.target.files);
+  var restam = 3 - _CERT_PROD.length;
+  if(restam <= 0){showToast('Limite de 3 certificados atingido','warn');return;}
+  files.slice(0, restam).forEach(function(f){
+    if(f.size > 5*1024*1024){showToast(f.name+' excede 5 MB','warn');return;}
+    var isPDF = f.type === 'application/pdf';
+    var r = new FileReader();
+    r.onload = function(ev){
+      _CERT_PROD.push({tipo: isPDF?'pdf':'img', src: ev.target.result, nome: f.name});
+      certProdRenderPreview();
+      // Also refresh edit-modal preview if open
+      var ecEl=document.getElementById('ec-cert-preview');
+      if(ecEl) certProdRenderPreviewIn(ecEl);
+    };
+    r.readAsDataURL(f);
+  });
+  e.target.value = '';
+}
+function certProdRemover(i){
+  _CERT_PROD.splice(i, 1);
+  certProdRenderPreview();
+}
+function certProdRenderPreview(){
+  // Render into whichever preview container is currently visible
+  var el = document.getElementById('cert-prod-preview');
+  if(el) certProdRenderPreviewIn(el);
+  var el2 = document.getElementById('ec-cert-preview');
+  if(el2) certProdRenderPreviewIn(el2);
+}
+function certProdZoom(i){
+  var m = _CERT_PROD[i]; if(!m) return;
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.onclick = function(){ov.remove();};
+  var img = document.createElement('img');
+  img.src = m.src; img.style.cssText = 'max-width:92vw;max-height:92vh;border-radius:8px';
+  ov.appendChild(img); document.body.appendChild(ov);
+}
+function certProdRenderPreviewIn(el){
+  if(!el)return;
+  if(!_CERT_PROD.length){
+    el.innerHTML='<p style="font-size:12px;color:var(--texto-suave)">Nenhum certificado.</p>';return;
+  }
+  el.innerHTML=_CERT_PROD.map(function(m,i){
+    if(m.tipo==='pdf'){
+      return '<div style="display:flex;align-items:center;gap:8px;background:var(--fundo);border:1px solid var(--borda);border-radius:6px;padding:8px 12px;margin-bottom:6px">'
+        +'<span style="font-size:22px">📄</span><div style="flex:1;min-width:0">'
+        +'<p style="font-size:12px;font-weight:600;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m.nome)+'</p>'
+        +'<a href="'+m.src+'" target="_blank" style="font-size:11px;color:var(--ouro)">Abrir PDF</a></div>'
+        +'<button type="button" onclick="certProdRemover('+i+');certProdRenderPreviewIn(document.getElementById(\'ec-cert-preview\')||document.getElementById(\'cert-prod-preview\'))" style="background:none;border:none;color:#eb5757;font-size:18px;cursor:pointer">×</button>'
+        +'</div>';
+    }
+    return '<div style="position:relative;display:inline-block;margin:0 6px 6px 0">'
+      +'<img src="'+m.src+'" onclick="certProdZoom('+i+')" style="width:90px;height:90px;object-fit:cover;border-radius:6px;cursor:zoom-in;border:1px solid var(--borda)">'
+      +'<div style="font-size:10px;color:var(--texto-suave);text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px">'+esc(m.nome)+'</div>'
+      +'<button type="button" onclick="certProdRemover('+i+');certProdRenderPreviewIn(document.getElementById(\'ec-cert-preview\')||document.getElementById(\'cert-prod-preview\'))" style="position:absolute;top:-6px;right:-6px;background:#eb5757;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1">×</button>'
+      +'</div>';
+  }).join('');
+}
+function certProdCarregar(arr){
+  // Load existing certificados when editing a product
+  _CERT_PROD = (arr||[]).slice();
+  certProdRenderPreview();
+}
+
 function saveProduto(){
   const nome=document.getElementById('pt-nome').value;
   if(!nome){showToast('Nome obrigatório','danger');return;}
@@ -3613,6 +3888,10 @@ function saveProduto(){
     colecao_atelier_id:colId,
     fotos:[]};
   obj.fotos = midiaGet('prod').slice();
+  obj.lab_cert  = document.getElementById('pt-lab')?.value||'';
+  obj.num_cert  = document.getElementById('pt-ncert')?.value||'';
+  obj.garantia  = document.getElementById('pt-garantia')?.value||'';
+  obj.certificados = (_CERT_PROD||[]).slice();
   DB.colecao.push(obj);
   saveDB();showToast('Produto cadastrado com sucesso');
   navTo('colecao');
@@ -3673,6 +3952,7 @@ function renderOrcamentos(c){
           <button class="btn btn-xs btn-outline" onclick="imprimirOrcamento(${o.id})">🖨 Imprimir</button>
           <button class="btn btn-xs btn-gold" onclick="openFichaTecnicaModal(${o.id})" title="Gerar Ficha Técnica">✦ Ficha</button>
           <button class="btn btn-xs btn-outline" onclick="gerarPropostaDeOrc(${o.id})">→ Proposta</button>
+          ${(()=>{const osVinc=DB.os.filter(x=>x.orcamento_id==o.id);return osVinc.length?osVinc.map(x=>`<span onclick="openOSModal(${x.id})" style="font-size:10px;background:var(--azul);color:var(--ouro-claro);padding:2px 8px;border-radius:10px;cursor:pointer" title="OS vinculada">⚙ OS #${x.id}</span>`).join(''):`<button class="btn btn-xs btn-outline" onclick="criarOSDeOrcamento(${o.id})" title="Criar OS a partir deste orçamento">+ OS</button>`;})()}
           ${podeExcluir()?`<button class="btn btn-xs btn-danger" onclick="excluirOrcamento(${o.id})">✕</button>`:''}
         </div></td>
       </tr>`;
