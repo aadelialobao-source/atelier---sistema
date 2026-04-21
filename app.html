@@ -1062,11 +1062,11 @@ function migrateUsers(){
   if(changed)saveUsers();
 }
 const ROLES = {
-  admin:{label:'Administrador',modules:['dashboard','clientes','protocolos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','datas_clientes','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
-  comercial:{label:'Comercial',modules:['dashboard','clientes','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
+  admin:{label:'Administrador',modules:['dashboard','clientes','protocolos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','nota_venda','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
+  comercial:{label:'Comercial',modules:['dashboard','clientes','datas_clientes','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
   producao:{label:'Produção',modules:['dashboard','os','etapas','qc','insumos_os','insumos','fichas'],verCusto:false,verMargem:false},
-  consultora:{label:'Consultora',modules:['dashboard','clientes','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
-  financeiro:{label:'Financeiro',modules:['dashboard','orcamentos','financeiro','despesas','cashback','metas','comissoes','reserva_dash','carteiras','historico_reserva','vendas_excluidas'],verCusto:true,verMargem:true},
+  consultora:{label:'Consultora',modules:['dashboard','clientes','datas_clientes','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
+  financeiro:{label:'Financeiro',modules:['dashboard','orcamentos','financeiro','despesas','resultado','relatorios','cashback','metas','comissoes','reserva_dash','carteiras','historico_reserva','vendas_excluidas'],verCusto:true,verMargem:true},
 };
 let SESS = null;
 
@@ -1151,7 +1151,17 @@ function _resetInactivityTimer(){
   _inactivityTimer=setTimeout(()=>{
     if(SESS){
       doLogout();
-      alert('Sessão encerrada por inatividade.');
+      // Modal de inatividade — alert() é bloqueado em PWA/iOS
+      const ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(13,31,45,.92);display:flex;align-items:center;justify-content:center;padding:20px';
+      const box=document.createElement('div');
+      box.style.cssText='background:#fff;border-radius:10px;padding:32px 36px;max-width:360px;width:100%;text-align:center;font-family:Jost,sans-serif';
+      box.innerHTML='<div style="font-size:36px;margin-bottom:12px">🔒</div>'
+        +'<p style="font-family:Cormorant Garamond,serif;font-size:20px;font-weight:600;color:#0D1F2D;margin-bottom:8px">Sessão encerrada</p>'
+        +'<p style="font-size:13px;color:#666;margin-bottom:20px">Você ficou inativo por 20 minutos. Por segurança, faça login novamente.</p>'
+        +'<button onclick="this.closest(\'div[style*=fixed]\').remove()" style="background:#0D1F2D;color:#B08E56;border:none;border-radius:6px;padding:12px 28px;font-family:Jost,sans-serif;font-size:14px;font-weight:600;cursor:pointer;width:100%">Entrar novamente</button>';
+      ov.appendChild(box);
+      document.body.appendChild(ov);
     }
   },INACTIVITY_LIMIT);
 }
@@ -1379,6 +1389,42 @@ function doLogout(){
   document.getElementById('l-user').value='';
   document.getElementById('l-pass').value='';
 }
+
+// ── Detector de race condition entre abas ────────────────────────────
+// Se outra aba ou dispositivo grava no banco enquanto esta aba está ativa,
+// avisa a usuária para recarregar — evita sobrescrever dados mais novos
+let _lastSaveTs = Date.now();
+window.addEventListener('storage', function(e){
+  if(!SESS) return;
+  if(e.key === 'atelier_db_v2' && e.newValue && e.newValue !== e.oldValue){
+    // Outra aba gravou — recarrega silenciosamente se não há alterações locais recentes
+    const msSinceLastSave = Date.now() - _lastSaveTs;
+    if(msSinceLastSave > 5000){
+      // Recarrega dados do localStorage sem refreshar a página
+      try{
+        const snap = JSON.parse(e.newValue);
+        if(snap && typeof snap === 'object'){
+          DB_KEYS.forEach(function(k){ if(Array.isArray(snap[k])) DB[k]=snap[k]; });
+          DB_OBJ_KEYS.forEach(function(k){
+            if(snap[k] && typeof snap[k]==='object' && !Array.isArray(snap[k])) Object.assign(DB[k], snap[k]);
+          });
+          if(snap._ids) Object.keys(snap._ids).forEach(function(k){ DB._ids[k]=snap._ids[k]; });
+          showToast('↻ Dados atualizados de outro dispositivo','info');
+          if(CUR_MOD && typeof renderModule==='function') renderModule(CUR_MOD);
+        }
+      }catch(err){ console.warn('[Sync] Erro ao ler atualização de outra aba:', err); }
+    } else {
+      showToast('⚠ Outro dispositivo também está gravando — risco de conflito','warn');
+    }
+  }
+});
+// Marca timestamp a cada saveDB para o detector acima
+const _saveDBOriginal = saveDB;
+// Sobrescrita segura — registra o momento do save local
+function saveDB(){
+  _lastSaveTs = Date.now();
+  _saveDBOriginal();
+}
 function canAccess(mod){
   if(!SESS) return false;
   const role=ROLES[SESS.role];
@@ -1397,6 +1443,7 @@ const NAV_ITEMS = [
   {id:'dashboard',icon:'◈',label:'Dashboard'},
   {section:'Clientes & Atendimento'},
   {id:'clientes',icon:'◇',label:'Clientes'},
+  {id:'datas_clientes',icon:'📅',label:'Datas Importantes'},
   {id:'protocolos',icon:'↧',label:'Protocolo de Entrada'},
   {id:'propostas',icon:'✦',label:'Propostas'},
   {section:'Produção'},
@@ -1412,9 +1459,13 @@ const NAV_ITEMS = [
   {id:'orcamentos',icon:'✦',label:'Orçamentos'},
   {id:'cashback',icon:'↺',label:'Cashback'},
   {id:'financeiro',icon:'₢',label:'Financeiro'},
+  {id:'despesas',icon:'↘',label:'Despesas'},
+  {id:'resultado',icon:'◎',label:'Resultado (DRE)'},
+  {id:'relatorios',icon:'≡',label:'Relatórios'},
   {section:'Comercial'},
   {id:'caixa',icon:'⊡',label:'Caixa'},
   {id:'vendas',icon:'◈',label:'Vendas'},
+  {id:'vendas_excluidas',icon:'◌',label:'Vendas Excluídas'},
   {id:'metas',icon:'◎',label:'Metas'},
   {id:'comissoes',icon:'%',label:'Comissões'},
   {section:'Reserva Ana Lobão'},
@@ -1433,12 +1484,14 @@ const NAV_ITEMS = [
 let CUR_MOD = 'dashboard';
 const PAGE_TITLES = {
   dashboard:'Dashboard',clientes:'Clientes',propostas:'Propostas',
+  datas_clientes:'Datas Importantes',
   os:'Ordens de Serviço',etapas:'Etapas de Produção',qc:'Controle de Qualidade',insumos_os:'Insumos por OS',
   insumos:'Insumos',colecao:'Coleção',produto:'Cadastrar Produto',
   orcamentos:'Orçamentos',cashback:'Cashback',financeiro:'Financeiro',
   vendas:'Vendas',metas:'Metas',comissoes:'Comissões',
   reserva_dash:'Reserva Ana Lobão',receber_ouro:'Receber Ouro',carteiras:'Carteiras',historico_reserva:'Histórico Reserva',
   fichas:'Fichas de Oficina',nota_venda:'Nota de Venda',romaneio:'Romaneio',
+  despesas:'Despesas',resultado:'Resultado (DRE)',relatorios:'Relatórios',vendas_excluidas:'Vendas Excluídas',
   protocolos:'Protocolo de Entrada',
   caixa:'Caixa',
   acessos:'Gerenciar Acessos',
@@ -1636,6 +1689,10 @@ function buildNav(){
 
 function navTo(mod){
   if(!canAccess(mod)){showToast('Acesso não autorizado','danger');return;}
+  // Limpa buffers de mídia do módulo anterior (evita vazamento de memória)
+  Object.keys(_MIDIA).forEach(function(k){ _MIDIA[k]=[]; });
+  // Reseta paginação do módulo anterior ao navegar para outro módulo
+  if(CUR_MOD && CUR_MOD !== mod) _pagReset(mod);
   CUR_MOD=mod;
   document.querySelectorAll('.sb-item').forEach(el=>el.classList.remove('active'));
   const el=document.getElementById('nav-'+mod);
@@ -1658,6 +1715,12 @@ function renderModule(mod){
     protocolos:renderProtocolos,
     caixa:renderCaixa,
     acessos:renderAcessos,
+    despesas:renderDespesas,
+    resultado:renderResultado,
+    relatorios:renderRelatorios,
+    vendas_excluidas:renderVendasExcluidas,
+    montagem:renderEtapas, // Montagem → redireciona para Etapas (kanban já filtra por setor)
+    datas_clientes:renderDatasClientes,
   };
   if(fns[mod])fns[mod](c);
   else c.innerHTML=`<div class="empty-state"><div class="empty-state-icon">🚧</div><p>Módulo em implementação</p></div>`;
@@ -1680,6 +1743,27 @@ function fmtN(v,d=2){return Number(v||0).toLocaleString('pt-BR',{minimumFraction
 function fmtDate(s){if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`;}
 function today(){return new Date().toISOString().split('T')[0];}
 function clienteNome(id){const c=DB.clientes.find(x=>x.id==id);return c?c.nome:'—';}
+
+// ── Paginação simples ──────────────────────────────────────────────
+// Controla quantos itens estão visíveis por módulo.
+// Uso: _PAG.get('modulo') → quantos itens mostrar atualmente
+const _PAG = {};
+const _PAG_TAMANHO = 50; // itens por página
+
+function _pagGet(chave){ return _PAG[chave] || _PAG_TAMANHO; }
+function _pagReset(chave){ _PAG[chave] = _PAG_TAMANHO; }
+
+// Retorna HTML do botão "Ver mais" quando há itens ocultos.
+// callbackFn: função JS a chamar (como string), que incrementa _PAG e re-renderiza.
+function _pagBtnHTML(total, exibido, callbackFn){
+  if(total <= exibido) return '';
+  const restam = total - exibido;
+  return `<tr><td colspan="99" style="text-align:center;padding:14px">
+    <button class="btn btn-outline btn-sm" onclick="${callbackFn}" style="font-size:13px">
+      ↓ Ver mais ${Math.min(restam, _PAG_TAMANHO)} de ${restam} restantes
+    </button>
+  </td></tr>`;
+}
 function showToast(msg,type='success'){
   const t=document.createElement('div');
   const bg={success:var_verde,danger:'#A60000',info:'#0D1F2D',warn:'#B7613B'};
@@ -1749,8 +1833,8 @@ function fecharModal(){
 // MODULE: DASHBOARD
 // ═══════════════════════════════════════════════════════════════════
 function renderDashboard(c){
-  const totalVendas=DB.vendas.reduce((a,v)=>a+v.valor_total,0);
-  const totalCaixa=DB.vendas.reduce((a,v)=>a+v.valor_em_caixa,0);
+  const totalVendas=DB.vendas.reduce((a,v)=>a+(v.valor_total||0),0);
+  const totalCaixa=DB.vendas.reduce((a,v)=>a+(v.valor_em_caixa||0),0);
   const osAbertas=DB.os.filter(o=>o.status!=='concluido').length;
   const totalReserva=calcSaldoTotal();
   const alertasVenc=DB.entradas_ouro.filter(e=>{
@@ -1793,7 +1877,7 @@ function renderDashboard(c){
       <div class="card-header"><span class="card-title">Ordens de Serviço</span><button class="btn btn-sm btn-outline" onclick="navTo('os')">Ver todas</button></div>
       <div style="overflow:hidden">
         <table><thead><tr><th>OS</th><th>Descrição</th><th>Status</th></tr></thead><tbody>
-        ${DB.os.slice(-5).map(o=>`<tr><td class="fw-600">#${o.id}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.descricao}</td><td>${osBadge(o.status)}</td></tr>`).join('')}
+        ${DB.os.slice(-5).map(o=>`<tr><td class="fw-600">#${o.id}</td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.descricao||'—'}</td><td>${osBadge(o.status)}</td></tr>`).join('')}
         </tbody></table>
       </div>
     </div>
@@ -1826,11 +1910,17 @@ function renderDashboard(c){
 function osBadge(s){const m={orcamento:'badge-gray',producao:'badge-yellow',concluido:'badge-green',entregue:'badge-gold',cancelado:'badge-red',aprovado:'badge-blue'};return`<span class="badge ${m[s]||'badge-gray'}">${s}</span>`;}
 function calcSaldoCliente(cid){
   const entradas=DB.entradas_ouro.filter(e=>e.cliente_id==cid);
-  const total_cred=entradas.reduce((a,e)=>a+e.credito,0);
-  const total_usado=DB.vendas_credito.filter(v=>v.cliente_id==cid).reduce((a,v)=>a+v.valor_usado,0);
+  const total_cred=entradas.reduce((a,e)=>a+(e.credito||0),0);
+  const total_usado=DB.vendas_credito.filter(v=>v.cliente_id==cid).reduce((a,v)=>a+(v.valor_usado||0),0);
   return total_cred-total_usado;
 }
 function calcSaldoTotal(){return DB.clientes.reduce((a,c)=>a+calcSaldoCliente(c.id),0);}
+
+// Calcula saldo de cashback de um cliente a partir de DB.cashback
+function calcCashbackCliente(cid){
+  const reg=DB.cashback.find(function(cb){return cb.cliente_id==cid;});
+  return reg?(reg.saldo||0):0;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // MODULE: CLIENTES — v3 · Cadastro Inteligente Ana Lobão
@@ -1918,30 +2008,30 @@ function proximosAniversarios(dias){
 }
 
 function buildClientesRows(list){
-  if(!list.length)return`<tr><td colspan="9" class="text-center text-suave" style="padding:32px">Nenhum cliente encontrado</td></tr>`;
-  return list.map(cl=>{
+  const exibir = _pagGet('clientes');
+  const visiveis = list.slice(0, exibir);
+  return visiveis.map(cl=>{
     const saldo=calcSaldoCliente(cl.id);
-    const classifBadge={VIP:'badge-gold',Premium:'badge-blue',Regular:'badge-gray'};
-    const estiloStr=clArr(cl.estilo).map(k=>CL_ESTILO_LABEL[k]||k).join(', ')||'—';
     return`<tr>
-      <td>
-        <strong>${cl.nome}</strong>${cl.apelido&&cl.apelido!==cl.nome?`<br><span class="text-suave" style="font-size:11px">${cl.apelido}</span>`:''}
-        ${cl.instagram?`<br><span class="text-suave" style="font-size:11px">${cl.instagram}</span>`:''}
-      </td>
-      <td><span style="font-size:12px">${cl.tel||'—'}</span></td>
-      <td><span class="badge badge-gray" style="font-size:11px">${CL_ORIGEM_LABEL[cl.origem]||cl.origem||'—'}</span></td>
-      <td style="font-size:12px;max-width:120px">${estiloStr}</td>
-      <td><span class="badge ${classifBadge[cl.classif]||'badge-gray'}">${cl.classif||'—'}</span></td>
-      <td class="fw-600" style="font-size:12px">${cl.ticket_estimado?fmt(cl.ticket_estimado):'—'}</td>
-      <td class="fw-600">${fmt(cl.ltv||0)}</td>
-      <td class="${saldo>0?'extrato-credit':''}">${saldo>0?fmt(saldo):'—'}</td>
+      <td><div class="fw-600" style="cursor:pointer;color:var(--azul)" onclick="verCliente(${cl.id})">${cl.nome}${cl.apelido&&cl.apelido!==cl.nome?`<br><span class="text-suave" style="font-size:11px">${cl.apelido}</span>`:''}</div></td>
+      <td style="font-size:12px">${cl.tel||'—'}<br>${cl.email||''}</td>
+      <td><span class="badge badge-blue" style="font-size:10px">${CL_ORIGEM_LABEL[cl.origem]||cl.origem||'—'}</span></td>
+      <td>${cl.estilo&&cl.estilo.length?cl.estilo.slice(0,2).map(e=>`<span class="badge badge-gray" style="font-size:10px;margin:1px">${CL_ESTILO_LABEL[e]||e}</span>`).join(''):'-'}</td>
+      <td><span class="badge ${cl.classif==='VIP'?'badge-gold':cl.classif==='Premium'?'badge-blue':'badge-gray'}">${cl.classif||'Regular'}</span></td>
+      <td>${cl.ticket_estimado?fmt(cl.ticket_estimado):'—'}</td>
+      <td class="${cl.ltv>0?'extrato-credit fw-600':''}">${cl.ltv?fmt(cl.ltv):'—'}</td>
+      <td>${saldo>0?`<span class="badge badge-green" style="font-size:10px">${fmt(saldo)}</span>`:'—'}</td>
       <td><div class="td-actions">
         <button class="btn btn-xs btn-outline" onclick="verCliente(${cl.id})">Ver</button>
-        <button class="btn btn-xs btn-outline" onclick="openClienteModal(${cl.id})">Editar</button>
+        <button class="btn btn-xs btn-gold" onclick="openClienteModal(${cl.id})">✎</button>
         ${podeExcluir()?`<button class="btn btn-xs btn-danger" onclick="excluirCliente(${cl.id})">✕</button>`:''}
       </div></td>
     </tr>`;
-  }).join('');
+  }).join('') + _pagBtnHTML(list.length, exibir, '_pagMaisClientes()');
+}
+function _pagMaisClientes(){
+  _PAG['clientes'] = (_PAG['clientes']||_PAG_TAMANHO) + _PAG_TAMANHO;
+  filterClientes();
 }
 function filterClientes(){
   const q=(document.getElementById('cl-busca').value||'').toLowerCase();
@@ -2211,7 +2301,6 @@ function saveCliente(id){
     tempo_decisao:_cf.tempo_decisao||'',
     atendimento_ideal:(_cf.atendimento_ideal||'').trim(),
     credito_ouro:existente?(existente.credito_ouro||0):0,
-    cashback_saldo:existente?(existente.cashback_saldo||0):0,
     historico:   existente?existente.historico:[],
     interacoes:  existente?existente.interacoes:[],
     data_cadastro: existente?(existente.data_cadastro||today()):today()
@@ -2350,7 +2439,7 @@ function verCliente(id){
     <!-- ABA OS -->
     <div id="vcl-os" class="tab-pane" style="padding:20px 24px">
       ${osCliente.length?`<div class="table-wrap"><table><thead><tr><th>OS</th><th>Descrição</th><th>Status</th><th>Prazo</th></tr></thead><tbody>
-      ${osCliente.map(o=>`<tr><td>#${o.id}</td><td>${o.descricao}</td><td>${osBadge(o.status)}</td><td>${fmtDate(o.prazo)}</td></tr>`).join('')}
+      ${osCliente.map(o=>`<tr><td>#${o.id}</td><td>${o.descricao||'—'}</td><td>${osBadge(o.status)}</td><td>${fmtDate(o.prazo)}</td></tr>`).join('')}
       </tbody></table></div>`:`<div class="empty-state"><div class="empty-state-icon">◫</div><p>Nenhuma OS vinculada</p></div>`}
     </div>
 
@@ -2490,7 +2579,7 @@ function renderOS(c){
       <div class="kanban-col-body" id="kan-${s}">
         ${DB.os.filter(o=>o.status===s).map(o=>`
           <div class="kanban-card" onclick="openOSModal(${o.id})">
-            <div class="kanban-card-title">#${o.id} · ${o.descricao.substring(0,40)}${o.descricao.length>40?'…':''}</div>
+            <div class="kanban-card-title">#${o.id} · ${(o.descricao||'').substring(0,40)}${(o.descricao||'').length>40?'…':''}</div>
             <div class="kanban-card-sub">${o.origem==='atelier'?`🏛 ${(DB.colecoes_atelier.find(c=>c.id==o.colecao_atelier_id)||{}).nome||'Coleção Atelier'}`:clienteNome(o.cliente_id)}</div>
             <div class="kanban-card-sub" style="margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               ${o.origem==='atelier'?`<span class="badge badge-gold" style="font-size:10px">✦ Atelier</span>`:''}
@@ -2574,7 +2663,7 @@ function openOSModal(id, preColecaoId){
         <div class="form-group"><label>Responsável</label>
           <select id="os-resp">
             <option value="">— Selecione —</option>
-            ${DB.colaboradores.filter(c=>c.ativo).map(c=>`<option value="${c.nome}" ${o.responsavel===c.nome?'selected':''}>${c.nome} · ${c.cargo||''}</option>`).join('')}
+            ${DB.colaboradores.filter(c=>c.ativo!==false).map(c=>`<option value="${c.nome}" ${o.responsavel===c.nome?'selected':''}>${c.nome} · ${c.cargo||''}</option>`).join('')}
             <option value="Ana Lobão" ${o.responsavel==='Ana Lobão'?'selected':''}>Ana Lobão · Gerência</option>
           </select></div>
       </div>
@@ -2795,7 +2884,7 @@ function renderEtapas(c){
             <div class="kanban-col-body">
               ${DB.etapas.filter(e=>e.setor===setor&&e.status===s).map(e=>`
                 <div class="kanban-card" onclick="openEtapaModal(${e.id})">
-                  <div class="kanban-card-title">OS #${e.os_id} — ${e.descricao.substring(0,36)}${e.descricao.length>36?'…':''}</div>
+                  <div class="kanban-card-title">OS #${e.os_id} — ${(e.descricao||'').substring(0,36)}${(e.descricao||'').length>36?'…':''}</div>
                   <div class="kanban-card-sub">👤 ${e.responsavel||'—'}</div>
                   ${e.inclui_acabamento?`<div style="margin-top:4px"><span class="badge badge-gold" style="font-size:10px">Acabamento incluído</span></div>`:''}
                   ${e.data_ini?`<div style="font-size:10px;color:var(--texto-suave);margin-top:4px">Início: ${fmtDate(e.data_ini)}</div>`:''}
@@ -2845,7 +2934,7 @@ function openEtapaModal(id){
     <div class="modal-body">
       <div class="form-grid" style="gap:14px">
         <div class="form-group"><label>OS</label><select id="et-os">
-          ${DB.os.filter(o=>o.status!=='cancelado').map(o=>`<option value="${o.id}" ${e.os_id==o.id?'selected':''}>#${o.id} — ${o.descricao.substring(0,30)}</option>`).join('')}
+          ${DB.os.filter(o=>o.status!=='cancelado').map(o=>`<option value="${o.id}" ${e.os_id==o.id?'selected':''}>#${o.id} — ${(o.descricao||'').substring(0,30)}</option>`).join('')}
         </select></div>
         <div class="form-group"><label>Setor</label><select id="et-setor">
           <option value="ourivesaria" ${e.setor==='ourivesaria'?'selected':''}>Ourivesaria</option>
@@ -2854,7 +2943,7 @@ function openEtapaModal(id){
         <div class="form-group"><label>Responsável</label>
           <select id="et-resp">
             <option value="">— Selecione —</option>
-            ${DB.colaboradores.filter(c=>c.ativo).map(c=>`<option value="${c.nome}" ${e.responsavel===c.nome?'selected':''}>${c.nome} · ${c.cargo||''}</option>`).join('')}
+            ${DB.colaboradores.filter(c=>c.ativo!==false).map(c=>`<option value="${c.nome}" ${e.responsavel===c.nome?'selected':''}>${c.nome} · ${c.cargo||''}</option>`).join('')}
             <option value="Ana Lobão" ${e.responsavel==='Ana Lobão'?'selected':''}>Ana Lobão · Gerência</option>
           </select>
         </div>
@@ -3254,7 +3343,7 @@ function renderQC(c){
 function openQCModal(id){
   const q=id?DB.qc.find(x=>x.id==id):null;
   midiaInit('qc', q?(q.fotos||[]).map(f=>typeof f==='string'?{tipo:'img',src:f,nome:'foto'}:f):[]);
-  const osOpts=DB.os.map(o=>`<option value="${o.id}" ${q&&q.os_id==o.id?'selected':''}>#${o.id} — ${o.descricao.substring(0,32)} (${clienteNome(o.cliente_id)})</option>`).join('');
+  const osOpts=DB.os.map(o=>`<option value="${o.id}" ${q&&q.os_id==o.id?'selected':''}>#${o.id} — ${(o.descricao||'').substring(0,32)} (${clienteNome(o.cliente_id)})</option>`).join('');
   const isReprov=q&&q.resultado==='reprovado';
   const div=document.createElement('div');div.className='modal-overlay';div.id='modal-qc';
   div.innerHTML=`<div class="modal modal-lg">
@@ -3408,7 +3497,7 @@ function openInsOSModal(){
     <div class="modal-body">
       <div class="form-grid" style="gap:14px">
         <div class="form-group"><label>OS</label><select id="ios-os">
-          ${DB.os.map(o=>`<option value="${o.id}">#${o.id} — ${o.descricao.substring(0,30)}</option>`).join('')}
+          ${DB.os.map(o=>`<option value="${o.id}">#${o.id} — ${(o.descricao||'').substring(0,30)}</option>`).join('')}
         </select></div>
         <div class="form-group"><label>Insumo</label><select id="ios-ins" onchange="calcInsOS()">
           ${DB.insumos.map(i=>`<option value="${i.id}" data-cu="${i.custo_unit}" data-un="${i.unidade}">${i.nome} (${fmt(i.custo_unit)}/${i.unidade})</option>`).join('')}
@@ -3600,7 +3689,7 @@ function renderColecao(c){
         <div style="border-top:1px solid var(--borda);padding-top:12px">
           <p style="font-size:11px;font-weight:600;color:var(--texto-suave);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">Ordens de Serviço</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            ${osVinculadas.map(o=>`<span class="badge ${o.status==='concluido'?'badge-green':o.status==='entregue'?'badge-gold':o.status==='cancelado'?'badge-red':'badge-blue'}" style="cursor:pointer;font-size:12px" onclick="openOSModal(${o.id})">#${o.id} · ${o.descricao.substring(0,24)} · ${o.status}</span>`).join('')}
+            ${osVinculadas.map(o=>`<span class="badge ${o.status==='concluido'?'badge-green':o.status==='entregue'?'badge-gold':o.status==='cancelado'?'badge-red':'badge-blue'}" style="cursor:pointer;font-size:12px" onclick="openOSModal(${o.id})">#${o.id} · ${(o.descricao||'').substring(0,24)} · ${o.status}</span>`).join('')}
           </div>
         </div>`:''}
       </div>
@@ -4179,6 +4268,8 @@ function syncOrcParams(){
 }
 
 function renderOrcamentos(c){
+  const _oOrdenados=[...DB.orcamentos].reverse();
+  const _oPag=_oOrdenados.slice(0,_pagGet('orcamentos'));
   c.innerHTML=`
   <div class="page-header">
     <div><p class="page-title">Orçamentos</p><p class="page-sub">${DB.orcamentos.length} orçamentos</p></div>
@@ -4186,14 +4277,14 @@ function renderOrcamentos(c){
   </div>
   <div class="table-wrap">
     <table><thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th>Descrição</th>${verCusto()?'<th>Custo</th><th>Preço Ideal</th>':''}<th>Status</th><th>Ações</th></tr></thead>
-    <tbody>${DB.orcamentos.map(o=>{
+    <tbody>${_oPag.map(o=>{
       const params=o.params||{au24k:757.05,conv18k:0.75,perda:10};
       const au18k_liq=params.au24k*params.conv18k*(1-params.perda/100);
       const b1=o.bloco1||{};
       const b2=o.bloco2||{};
       const b3=o.bloco3||{};
       const custo_ouro=(b1.peso_ouro||0)*au18k_liq;
-      const custo_gemas=(b1.gemas||[]).reduce((a,g)=>a+g.qtd*g.custo*(g.moeda==='USD'?(params.dolar||5.85):1),0);
+      const custo_gemas=(b1.gemas||[]).reduce((a,g)=>a+(g.qtd||0)*(g.custo||0)*(g.moeda==='USD'?(params.dolar||5.85):1),0);
       const custo_b1=custo_ouro+(b1.mao_obra||0)+(b1.mao_obra2||0)+custo_gemas+(b1.outros||0)+(b1.silicone||0);
       const custo_b2=Object.values(b2).reduce((a,v)=>a+(v||0),0);
       const custo_total=custo_b1+custo_b2;
@@ -4203,9 +4294,9 @@ function renderOrcamentos(c){
       const tipoLabel={joia_nova:'✦ Joia Nova',conserto:'◈ Conserto',ressignificar:'◇ Ressignificar',produto_pronto:'◻ Produto Pronto'};
       return`<tr>
         <td>${fmtDate(o.data)}</td>
-        <td><span class="badge ${tipoBadge[o.tipo]||'badge-gray'}">${tipoLabel[o.tipo]||o.tipo}</span></td>
+        <td><span class="badge ${tipoBadge[o.tipo]||'badge-gray'}">${tipoLabel[o.tipo]||o.tipo||'—'}</span></td>
         <td>${clienteNome(o.cliente_id)}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.descricao}</td>
+        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.descricao||'—'}</td>
         ${verCusto()?`<td>${fmt(custo_total)}</td><td class="fw-600" style="color:var(--verde)">${fmt(preco_ideal)}</td>`:''}
         <td><span class="badge ${o.status==='enviado'?'badge-blue':'badge-gray'}">${o.status||'rascunho'}</span></td>
         <td><div class="td-actions">
@@ -4217,9 +4308,14 @@ function renderOrcamentos(c){
           ${podeExcluir()?`<button class="btn btn-xs btn-danger" onclick="excluirOrcamento(${o.id})">✕</button>`:''}
         </div></td>
       </tr>`;
-    }).join('')||'<tr><td colspan="8" class="text-center text-suave" style="padding:32px">Nenhum orçamento</td></tr>'}</tbody>
-    </table>
+    }).join('')||'<tr><td colspan="8" class="text-center text-suave" style="padding:32px">Nenhum orçamento</td></tr>'}
+    ${_pagBtnHTML(_oOrdenados.length,_oPag.length,'_pagMaisOrcamentos()')}
+    </tbody></table>
   </div>`;
+}
+function _pagMaisOrcamentos(){
+  _PAG['orcamentos']=(_PAG['orcamentos']||_PAG_TAMANHO)+_PAG_TAMANHO;
+  renderOrcamentos(document.getElementById('content'));
 }
 
 function excluirOrcamento(id){
@@ -4710,13 +4806,13 @@ function midiaAdicionarArquivos(e, key) {
       var url = URL.createObjectURL(f);
       imgEl.onload = function() {
         URL.revokeObjectURL(url);
-        var MAX = 1200, w = imgEl.naturalWidth, h = imgEl.naturalHeight;
+        var MAX = 800, w = imgEl.naturalWidth, h = imgEl.naturalHeight;
         if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
         if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
         var cv = document.createElement('canvas');
         cv.width = w; cv.height = h;
         cv.getContext('2d').drawImage(imgEl, 0, 0, w, h);
-        var b64 = cv.toDataURL('image/jpeg', 0.82);
+        var b64 = cv.toDataURL('image/jpeg', 0.70);
         if (!_MIDIA[key]) _MIDIA[key] = [];
         _MIDIA[key].push({tipo:'img', src:b64, nome:f.name});
         midiaRenderPreview(key);
@@ -5051,7 +5147,7 @@ function renderPropostas(c){
     <tbody>${DB.propostas.map(p=>`<tr>
       <td>${fmtDate(p.data)}</td>
       <td>${clienteNome(p.cliente_id)}</td>
-      <td>${p.nome_peca}</td>
+      <td>${p.nome_peca||'—'}</td>
       <td class="fw-600">${fmt(p.valor)}</td>
       <td>${p.prazo||'—'}</td>
       <td><span class="badge ${p.status==='enviada'?'badge-blue':'badge-gray'}">${p.status}</span></td>
@@ -5581,9 +5677,11 @@ function renderHistoricoReserva(c){
 // MODULE: FINANCEIRO
 // ═══════════════════════════════════════════════════════════════════
 function renderFinanceiro(c){
-  const entradas=DB.financeiro.filter(f=>f.tipo==='entrada').reduce((a,f)=>a+f.valor,0);
-  const saidas=DB.financeiro.filter(f=>f.tipo==='saida').reduce((a,f)=>a+f.valor,0);
+  const entradas=DB.financeiro.filter(f=>f.tipo==='entrada').reduce((a,f)=>a+(f.valor||0),0);
+  const saidas=DB.financeiro.filter(f=>f.tipo==='saida').reduce((a,f)=>a+(f.valor||0),0);
   const saldo=entradas-saidas;
+  const _fOrdenados=[...DB.financeiro].reverse();
+  const _fPag=_fOrdenados.slice(0,_pagGet('financeiro'));
   c.innerHTML=`
   <div class="page-header">
     <div><p class="page-title">Financeiro</p><p class="page-sub">Fluxo de caixa do atelier</p></div>
@@ -5595,16 +5693,21 @@ function renderFinanceiro(c){
     <div class="kpi ${saldo>=0?'ouro':'danger'}"><div class="kpi-label">Saldo</div><div class="kpi-value">${fmt(saldo)}</div></div>
   </div>
   <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Forma</th><th>Valor</th><th>Ações</th></tr></thead>
-  <tbody>${[...DB.financeiro].reverse().map(f=>`<tr>
+  <tbody>${_fPag.length?_fPag.map(f=>`<tr>
     <td>${fmtDate(f.data)}</td>
     <td><span class="badge ${f.tipo==='entrada'?'badge-green':'badge-red'}">${f.tipo}</span></td>
-    <td>${f.categoria}</td>
-    <td>${f.descricao}</td>
-    <td><span class="badge badge-blue">${f.forma}</span></td>
+    <td>${f.categoria||'—'}</td>
+    <td>${f.descricao||'—'}</td>
+    <td><span class="badge badge-blue">${f.forma||'—'}</span></td>
     <td class="${f.tipo==='entrada'?'extrato-credit':'extrato-debit'} fw-600">${f.tipo==='entrada'?'+':'−'}${fmt(f.valor)}</td>
     <td><button class="btn btn-xs btn-danger" onclick="excluirFin(${f.id})">×</button></td>
-  </tr>`).join('')||'<tr><td colspan="7" class="text-center text-suave" style="padding:32px">Nenhum lançamento</td></tr>'}
+  </tr>`).join(''):'<tr><td colspan="7" class="text-center text-suave" style="padding:32px">Nenhum lançamento</td></tr>'}
+  ${_pagBtnHTML(_fOrdenados.length,_fPag.length,'_pagMaisFinanceiro()')}
   </tbody></table></div>`;
+}
+function _pagMaisFinanceiro(){
+  _PAG['financeiro']=(_PAG['financeiro']||_PAG_TAMANHO)+_PAG_TAMANHO;
+  renderFinanceiro(document.getElementById('content'));
 }
 function openFinModal(){
   const div=document.createElement('div');div.className='modal-overlay';div.id='modal-fin';
@@ -5645,8 +5748,10 @@ function excluirFin(id){
 // MODULE: VENDAS
 // ═══════════════════════════════════════════════════════════════════
 function renderVendas(c){
-  const total=DB.vendas.reduce((a,v)=>a+v.valor_total,0);
-  const caixa=DB.vendas.reduce((a,v)=>a+v.valor_em_caixa,0);
+  const total=DB.vendas.reduce((a,v)=>a+(v.valor_total||0),0);
+  const caixa=DB.vendas.reduce((a,v)=>a+(v.valor_em_caixa||0),0);
+  const _vOrdenadas=[...DB.vendas].reverse();
+  const _vPag=_vOrdenadas.slice(0,_pagGet('vendas'));
   c.innerHTML=`
   <div class="page-header">
     <div><p class="page-title">Vendas</p><p class="page-sub">${DB.vendas.length} vendas · ${fmt(total)} em faturamento</p></div>
@@ -5659,16 +5764,21 @@ function renderVendas(c){
     <div class="kpi"><div class="kpi-label">Ticket Médio</div><div class="kpi-value">${DB.vendas.length?fmt(total/DB.vendas.length):'R$ 0,00'}</div></div>
   </div>
   <div class="table-wrap"><table><thead><tr><th>Data</th><th>Cliente</th><th>Descrição</th><th>Total</th><th>Em Caixa</th><th>Reserva</th><th>Pagto</th><th>Colaborador</th></tr></thead>
-  <tbody>${[...DB.vendas].reverse().map(v=>`<tr>
+  <tbody>${_vPag.map(v=>`<tr>
     <td>${fmtDate(v.data)}</td><td>${clienteNome(v.cliente_id)}</td>
-    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.descricao}</td>
+    <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.descricao||'—'}</td>
     <td class="fw-600">${fmt(v.valor_total)}</td>
     <td class="extrato-credit">${fmt(v.valor_em_caixa)}</td>
     <td class="${v.credito_ouro_aplic>0?'extrato-debit':''}">${v.credito_ouro_aplic>0?fmt(v.credito_ouro_aplic):'—'}</td>
-    <td><span class="badge badge-blue">${v.forma_pgto}</span></td>
-    <td>${v.colaborador}</td>
+    <td><span class="badge badge-blue">${v.forma_pgto||'—'}</span></td>
+    <td>${v.colaborador||'—'}</td>
   </tr>`).join('')}
+  ${_pagBtnHTML(_vOrdenadas.length,_vPag.length,'_pagMaisVendas()')}
   </tbody></table></div>`;
+}
+function _pagMaisVendas(){
+  _PAG['vendas']=(_PAG['vendas']||_PAG_TAMANHO)+_PAG_TAMANHO;
+  renderVendas(document.getElementById('content'));
 }
 function openVendaModal(){
   const div=document.createElement('div');div.className='modal-overlay';div.id='modal-venda';
@@ -5686,7 +5796,8 @@ function openVendaModal(){
           <option>PIX</option><option>Cartão</option><option>Dinheiro</option><option>Reserva</option><option>Misto</option>
         </select></div>
         <div class="form-group"><label>Colaborador</label><select id="vd-colab">
-          ${DB.colaboradores.filter(x=>x.ativo).map(co=>`<option>${co.nome}</option>`).join('')}
+          ${DB.colaboradores.filter(x=>x.ativo!==false).map(co=>`<option>${co.nome}</option>`).join('')}
+          <option>Ana Lobão</option>
         </select></div>
         <div class="form-group"><label>Crédito Reserva a Usar (R$)</label><input id="vd-reserva" type="number" step="10" value="0" oninput="calcVenda()"></div>
         <div class="form-group"><label>Valor em Caixa (auto)</label><input id="vd-caixa" type="number" step="10" value="0" readonly style="background:#eee;font-size:15px"></div>
@@ -5735,7 +5846,7 @@ function saveVenda(){
 // ═══════════════════════════════════════════════════════════════════
 function renderMetas(c){
   const periodo=new Date().toISOString().substring(0,7);
-  const vendasMes=DB.vendas.filter(v=>v.data.startsWith(periodo)).reduce((a,v)=>a+v.valor_total,0);
+  const vendasMes=DB.vendas.filter(v=>v.data&&v.data.startsWith(periodo)).reduce((a,v)=>a+(v.valor_total||0),0);
   const osMes=DB.os.filter(o=>o.prazo&&o.prazo.startsWith(periodo)).length;
   c.innerHTML=`
   <div class="page-header">
@@ -5749,7 +5860,7 @@ function renderMetas(c){
   <div class="table-wrap"><table><thead><tr><th>Período</th><th>Colaborador</th><th>Meta Vendas</th><th>Realizado</th><th>%</th><th>Meta OS</th></tr></thead>
   <tbody>${DB.metas.map(m=>{
     const colab=DB.colaboradores.find(x=>x.id==m.colaborador_id);
-    const real=DB.vendas.filter(v=>v.data.startsWith(m.periodo)&&v.colaborador==colab?.nome).reduce((a,v)=>a+v.valor_total,0);
+    const real=DB.vendas.filter(v=>v.data&&v.data.startsWith(m.periodo)&&v.colaborador==colab?.nome).reduce((a,v)=>a+(v.valor_total||0),0);
     const pct=m.meta_vendas>0?Math.min(100,(real/m.meta_vendas*100)).toFixed(0):0;
     return`<tr>
       <td>${m.periodo}</td><td>${colab?colab.nome:'—'}</td>
@@ -5776,7 +5887,7 @@ function openMetaModal(){
       <div class="form-grid" style="gap:14px">
         <div class="form-group"><label>Período (YYYY-MM)</label><input id="mt-periodo" value="${new Date().toISOString().substring(0,7)}"></div>
         <div class="form-group"><label>Colaborador</label><select id="mt-colab">
-          ${DB.colaboradores.filter(x=>x.ativo).map(co=>`<option value="${co.id}">${co.nome}</option>`).join('')}
+          ${DB.colaboradores.filter(x=>x.ativo!==false).map(co=>`<option value="${co.id}">${co.nome}</option>`).join('')}
         </select></div>
         <div class="form-group"><label>Meta Vendas (R$)</label><input id="mt-vendas" type="number" step="500" value="10000"></div>
         <div class="form-group"><label>Meta OS</label><input id="mt-os" type="number" value="6"></div>
@@ -5805,7 +5916,7 @@ function renderComissoes(c){
   </div>
   <div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Cargo</th><th>% Comissão</th><th>Vendas em Caixa</th><th>Comissão a Pagar</th></tr></thead>
   <tbody>${DB.colaboradores.filter(co=>co.comissao_pct>0).map(co=>{
-    const vendasCaixa=DB.vendas.filter(v=>v.colaborador==co.nome).reduce((a,v)=>a+v.valor_em_caixa,0);
+    const vendasCaixa=DB.vendas.filter(v=>v.colaborador==co.nome).reduce((a,v)=>a+(v.valor_em_caixa||0),0);
     const comissao=vendasCaixa*(co.comissao_pct/100);
     return`<tr>
       <td class="fw-600">${co.nome}</td>
@@ -5932,7 +6043,7 @@ function imprimirFicha(osId){
     <div class="proposta-body">
       <!-- Nome do cliente OMITIDO intencionalmente — documento de produção -->
       <p><strong>Responsável:</strong> ${o.responsavel||'—'}</p>
-      <p><strong>Descrição:</strong> ${o.descricao}</p>
+      <p><strong>Descrição:</strong> ${o.descricao||'—'}</p>
       <h3 style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--azul);margin:20px 0 10px">Etapas de Produção</h3>
       ${etapas.length?`<table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:var(--azul);color:#fff"><th style="padding:8px 12px;text-align:left;font-size:12px">Setor</th><th style="padding:8px 12px;text-align:left;font-size:12px">Descrição</th><th style="padding:8px 12px;text-align:left;font-size:12px">Responsável</th><th style="padding:8px 12px;text-align:left;font-size:12px">Status</th></tr></thead>
@@ -5975,7 +6086,7 @@ function renderNotaVenda(c){
   <div class="table-wrap"><table><thead><tr><th>Data</th><th>Venda</th><th>Cliente</th><th>Valor</th><th>Ações</th></tr></thead>
   <tbody>${[...DB.vendas].reverse().map(v=>`<tr>
     <td>${fmtDate(v.data)}</td>
-    <td>#${v.id} · ${v.descricao.substring(0,30)}</td>
+    <td>#${v.id} · ${(v.descricao||'').substring(0,30)}</td>
     <td>${clienteNome(v.cliente_id)}</td>
     <td class="fw-600">${fmt(v.valor_total)}</td>
     <td><button class="btn btn-xs btn-outline" onclick="imprimirNota(${v.id})">⎙ Emitir Nota</button></td>
@@ -6052,6 +6163,166 @@ function openRomModal(){
     <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-rom')">Cancelar</button><button class="btn btn-primary" onclick="closeModal('modal-rom');showToast('Romaneio registrado')">Salvar</button></div>
   </div>`;
   document.body.appendChild(div);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MÓDULOS — Stubs funcionais para módulos não implementados
+// ═══════════════════════════════════════════════════════════════════
+
+function renderDespesas(c){
+  const total=DB.despesas?DB.despesas.reduce(function(a,d){return a+(d.valor||0);},0):0;
+  const recorrentes=DB.despesas_recorrentes?DB.despesas_recorrentes.length:0;
+  c.innerHTML=`
+  <div class="page-header">
+    <div><p class="page-title">Despesas</p><p class="page-sub">${DB.despesas?DB.despesas.length:0} lançamentos · ${fmt(total)} em despesas</p></div>
+    <button class="btn btn-primary" onclick="openFinModal()">+ Novo Lançamento</button>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi danger"><div class="kpi-label">Total Despesas</div><div class="kpi-value">${fmt(total)}</div></div>
+    <div class="kpi"><div class="kpi-label">Recorrentes</div><div class="kpi-value">${recorrentes}</div><div class="kpi-sub">despesas fixas cadastradas</div></div>
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>Data</th><th>Categoria</th><th>Descrição</th><th>Forma</th><th>Valor</th></tr></thead>
+  <tbody>${DB.despesas&&DB.despesas.length?[...DB.despesas].reverse().map(function(d){return`<tr>
+    <td>${fmtDate(d.data)}</td><td>${d.categoria||'—'}</td>
+    <td>${d.descricao||'—'}</td>
+    <td><span class="badge badge-blue">${d.forma||'—'}</span></td>
+    <td class="extrato-debit fw-600">− ${fmt(d.valor)}</td>
+  </tr>`;}).join(''):'<tr><td colspan="5" class="text-center text-suave" style="padding:32px">Nenhuma despesa registrada. Use Financeiro → Saída para lançar.</td></tr>'}
+  </tbody></table></div>`;
+}
+
+function renderResultado(c){
+  const mes=new Date().toISOString().substring(0,7);
+  const receitaMes=DB.vendas.filter(function(v){return v.data&&v.data.startsWith(mes);}).reduce(function(a,v){return a+(v.valor_em_caixa||0);},0);
+  const despMes=DB.financeiro.filter(function(f){return f.tipo==='saida'&&f.data&&f.data.startsWith(mes);}).reduce(function(a,f){return a+(f.valor||0);},0);
+  const lucroMes=receitaMes-despMes;
+  const receitaTotal=DB.vendas.reduce(function(a,v){return a+(v.valor_em_caixa||0);},0);
+  const despTotal=DB.financeiro.filter(function(f){return f.tipo==='saida';}).reduce(function(a,f){return a+(f.valor||0);},0);
+  c.innerHTML=`
+  <div class="page-header">
+    <div><p class="page-title">Resultado</p><p class="page-sub">DRE simplificado · ${mes}</p></div>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi verde"><div class="kpi-label">Receita Mês</div><div class="kpi-value">${fmt(receitaMes)}</div><div class="kpi-sub">em caixa</div></div>
+    <div class="kpi danger"><div class="kpi-label">Despesas Mês</div><div class="kpi-value">${fmt(despMes)}</div></div>
+    <div class="kpi ${lucroMes>=0?'ouro':'danger'}"><div class="kpi-label">Resultado Mês</div><div class="kpi-value">${fmt(lucroMes)}</div><div class="kpi-sub">${lucroMes>=0?'Lucro':'Prejuízo'}</div></div>
+  </div>
+  <div class="card" style="margin-top:20px">
+    <div class="card-header"><span class="card-title">Acumulado Total</span></div>
+    <div class="card-body">
+      <div class="extrato-row"><span>Receita total (em caixa)</span><span class="extrato-credit fw-600">${fmt(receitaTotal)}</span></div>
+      <div class="extrato-row"><span>Despesas totais</span><span class="extrato-debit fw-600">− ${fmt(despTotal)}</span></div>
+      <div class="extrato-row" style="border-top:2px solid var(--borda);margin-top:8px;padding-top:8px">
+        <span class="fw-600">Resultado acumulado</span>
+        <span class="${receitaTotal-despTotal>=0?'extrato-credit':'extrato-debit'} fw-600" style="font-size:18px">${fmt(receitaTotal-despTotal)}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderRelatorios(c){
+  const totalClientes=DB.clientes.length;
+  const totalOS=DB.os.length;
+  const osAbertas=DB.os.filter(function(o){return o.status!=='concluido'&&o.status!=='entregue'&&o.status!=='cancelado';}).length;
+  const totalVendas=DB.vendas.reduce(function(a,v){return a+(v.valor_total||0);},0);
+  const ticketMedio=DB.vendas.length?totalVendas/DB.vendas.length:0;
+  c.innerHTML=`
+  <div class="page-header">
+    <div><p class="page-title">Relatórios</p><p class="page-sub">Visão consolidada do atelier</p></div>
+  </div>
+  <div class="grid-2" style="gap:20px">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Clientes</span></div>
+      <div class="card-body">
+        <div class="extrato-row"><span>Total cadastrados</span><span class="fw-600">${totalClientes}</span></div>
+        <div class="extrato-row"><span>VIP</span><span class="fw-600">${DB.clientes.filter(function(c){return c.classif==='VIP';}).length}</span></div>
+        <div class="extrato-row"><span>Premium</span><span class="fw-600">${DB.clientes.filter(function(c){return c.classif==='Premium';}).length}</span></div>
+        <div class="extrato-row"><span>Com Reserva Ouro ativa</span><span class="fw-600">${DB.clientes.filter(function(cl){return calcSaldoCliente(cl.id)>0;}).length}</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Produção</span></div>
+      <div class="card-body">
+        <div class="extrato-row"><span>Total OS</span><span class="fw-600">${totalOS}</span></div>
+        <div class="extrato-row"><span>OS abertas</span><span class="fw-600" style="color:var(--amarelo)">${osAbertas}</span></div>
+        <div class="extrato-row"><span>Etapas pendentes</span><span class="fw-600">${DB.etapas.filter(function(e){return e.status!=='concluida';}).length}</span></div>
+        <div class="extrato-row"><span>QC realizados</span><span class="fw-600">${DB.qc.length}</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Comercial</span></div>
+      <div class="card-body">
+        <div class="extrato-row"><span>Total vendas</span><span class="fw-600">${DB.vendas.length}</span></div>
+        <div class="extrato-row"><span>Faturamento total</span><span class="extrato-credit fw-600">${fmt(totalVendas)}</span></div>
+        <div class="extrato-row"><span>Ticket médio</span><span class="fw-600">${fmt(ticketMedio)}</span></div>
+        <div class="extrato-row"><span>Orçamentos</span><span class="fw-600">${DB.orcamentos.length}</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Reserva Ouro</span></div>
+      <div class="card-body">
+        <div class="extrato-row"><span>Entradas de ouro</span><span class="fw-600">${DB.entradas_ouro.length}</span></div>
+        <div class="extrato-row"><span>Crédito total gerado</span><span class="extrato-credit fw-600">${fmt(DB.entradas_ouro.reduce(function(a,e){return a+(e.credito||0);},0))}</span></div>
+        <div class="extrato-row"><span>Crédito utilizado</span><span class="fw-600">${fmt(DB.vendas_credito.reduce(function(a,v){return a+(v.valor_usado||0);},0))}</span></div>
+        <div class="extrato-row"><span>Saldo disponível total</span><span class="extrato-credit fw-600">${fmt(calcSaldoTotal())}</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderVendasExcluidas(c){
+  const excluidas=DB.vendas_excluidas||[];
+  c.innerHTML=`
+  <div class="page-header">
+    <div><p class="page-title">Vendas Excluídas</p><p class="page-sub">${excluidas.length} registro(s) — auditoria</p></div>
+  </div>
+  <div class="alert alert-warn" style="margin-bottom:16px;font-size:13px">
+    ⚠ Este módulo exibe vendas removidas para fins de auditoria. Os dados não afetam relatórios ou cálculos.
+  </div>
+  <div class="table-wrap"><table><thead><tr><th>Data Exclusão</th><th>Venda Original</th><th>Cliente</th><th>Valor</th><th>Excluída por</th></tr></thead>
+  <tbody>${excluidas.length?[...excluidas].reverse().map(function(v){return`<tr>
+    <td>${fmtDate(v.data_exclusao||v.data)}</td>
+    <td>#${v.id_original||v.id} · ${(v.descricao||'').substring(0,30)}</td>
+    <td>${clienteNome(v.cliente_id)}</td>
+    <td class="extrato-debit fw-600">− ${fmt(v.valor_total)}</td>
+    <td style="font-size:12px;color:var(--texto-suave)">${v.excluida_por||'—'}</td>
+  </tr>`;}).join(''):'<tr><td colspan="5" class="text-center text-suave" style="padding:32px">Nenhuma venda excluída registrada</td></tr>'}
+  </tbody></table></div>`;
+}
+
+function renderDatasClientes(c){
+  const hoje=new Date();
+  const todasDatas=(DB.datas_importantes||[]).filter(function(d){return d.data;}).map(function(d){
+    const cl=DB.clientes.find(function(c){return c.id==d.cliente_id;})||{};
+    const partes=d.data.split('-');
+    if(partes.length<3)return null;
+    const aniv=new Date(hoje.getFullYear(),+partes[1]-1,+partes[2]);
+    if(aniv<hoje)aniv.setFullYear(hoje.getFullYear()+1);
+    const diff=Math.ceil((aniv-hoje)/(1000*60*60*24));
+    return{...d,cliente_nome:cl.nome||'—',dias:diff,data_fmt:partes[2]+'/'+partes[1]};
+  }).filter(Boolean).sort(function(a,b){return a.dias-b.dias;});
+  const proximos=todasDatas.filter(function(d){return d.dias<=30;});
+  c.innerHTML=`
+  <div class="page-header">
+    <div><p class="page-title">Datas Importantes</p><p class="page-sub">${proximos.length} data(s) nos próximos 30 dias</p></div>
+  </div>
+  ${proximos.length?`<div class="alert alert-warn" style="margin-bottom:16px">
+    📅 <strong>${proximos.length}</strong> data(s) próximas — oportunidade de contato proativo.
+  </div>`:''}
+  <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th>Nome Assoc.</th><th>Dias p/ data</th><th>Obs.</th></tr></thead>
+  <tbody>${todasDatas.length?todasDatas.map(function(d){
+    const urgente=d.dias<=7;
+    const breve=d.dias<=30;
+    return`<tr style="${urgente?'background:rgba(166,0,0,.04)':breve?'background:rgba(176,142,86,.04)':''}">
+      <td class="fw-600">${d.data_fmt}</td>
+      <td><span class="badge badge-blue" style="font-size:10px">${d.tipo}</span></td>
+      <td>${d.cliente_nome}</td>
+      <td>${d.nome_assoc||'—'}</td>
+      <td><span class="${urgente?'badge badge-red':breve?'badge badge-yellow':'badge badge-gray'}">${d.dias===0?'Hoje!':d.dias+'d'}</span></td>
+      <td style="font-size:12px;color:var(--texto-suave)">${d.obs||'—'}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="6" class="text-center text-suave" style="padding:32px">Nenhuma data importante cadastrada</td></tr>'}
+  </tbody></table></div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -6988,18 +7259,9 @@ function imprimirOrcamento(id){
 // PWA + AUTO-LOGIN + INIT
 // ═══════════════════════════════════════════════════════════════════
 
-// Service Worker registration
-if('serviceWorker' in navigator){
-  const swContent=`
-const CACHE='atelier-v12';
-const ASSETS=['./'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
-self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).catch(()=>caches.match('/'))) ));
-  `;
-  const blob=new Blob([swContent],{type:'application/javascript'});
-  const url=URL.createObjectURL(blob);
-  navigator.serviceWorker.register(url).catch(()=>{});
-}
+// Service Worker: arquivo single-file não suporta SW externo.
+// O app funciona como PWA (add to homescreen, standalone) sem SW.
+// Para cache offline real, use Supabase + exportar backup periodicamente.
 
 // iOS PWA install banner
 function showIOSBanner(){
@@ -7244,7 +7506,7 @@ function renderUltimoFechamento(){
 function abrirCaixaModal(){
   if(!podeAbrirCaixa()){showToast('Sem permissão para operar o caixa','danger');return;}
   var hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  var collabs=DB.colaboradores.filter(function(x){return x.ativo;});
+  var collabs=DB.colaboradores.filter(function(x){return x.ativo!==false;});
   var opts=collabs.map(function(co){return '<option>'+co.nome+'</option>';}).join('')+'<option>Ana Lobão</option>';
   var html='<div style="padding:20px">'
     +'<div class="form-group" style="margin-bottom:14px"><label>Valor inicial (fundo de caixa) R$</label>'
@@ -7273,8 +7535,8 @@ function novaVendaCaixaModal(){
   var prodOpts=DB.colecao.filter(function(p){return p.estoque>0;}).map(function(p){
     return '<option value="'+p.id+'">'+p.nome+(p.metal?' · '+p.metal:'')+' · Estoque: '+p.estoque+' · '+fmt(p.preco)+'</option>';
   }).join('');
-  var collabs=DB.colaboradores.filter(function(x){return x.ativo;});
-  var colOpts=collabs.map(function(co){return '<option>'+co.nome+'</option>';}).join('')+(collabs.length===0?'<option>Ana Lobão</option>':'');
+  var collabs=DB.colaboradores.filter(function(x){return x.ativo!==false;});
+  var colOpts=collabs.map(function(co){return '<option>'+co.nome+'</option>';}).join('')+'<option>Ana Lobão</option>';
   var html='<div style="padding:20px">'
     +'<div class="form-group" style="margin-bottom:12px"><label>Produto do Catálogo <span style="font-size:11px;color:var(--texto-suave)">(opcional)</span></label>'
     +'<select id="cxv-produto" onchange="selecionarProdutoCaixa()" style="width:100%;padding:10px 14px;font-size:14px;border:1.5px solid #C4BDB4;border-radius:6px;background:var(--fundo-input);font-family:Jost,sans-serif">'
@@ -7791,6 +8053,8 @@ var PROTO_STATUS_BADGE = {
 
 function renderProtocolos(c){
   var list=DB.protocolos||[];
+  var listOrdenada=[...list].reverse();
+  var listPag=listOrdenada.slice(0,_pagGet('protocolos'));
   c.innerHTML=`
   <div class="page-header">
     <div>
@@ -7818,7 +8082,7 @@ function renderProtocolos(c){
         <th style="padding:10px 14px;text-align:left;font-size:11px;color:var(--texto-suave)">Ações</th>
       </tr></thead>
       <tbody>
-        ${[...list].reverse().map(function(p){
+        ${listPag.map(function(p){
           var cl=DB.clientes.find(function(c){return c.id==p.cliente_id;})||{};
           return '<tr style="border-bottom:1px solid var(--borda)">'
             +'<td style="padding:10px 14px"><strong style="color:var(--azul);font-family:\'Cormorant Garamond\',serif;font-size:15px">#'+p.numero+'</strong></td>'
@@ -7837,10 +8101,15 @@ function renderProtocolos(c){
             +'</div></td>'
           +'</tr>';
         }).join('')}
+        ${_pagBtnHTML(listOrdenada.length,listPag.length,'_pagMaisProtocolos()')}
       </tbody>
     </table>
     </div>
   </div>`}`;
+}
+function _pagMaisProtocolos(){
+  _PAG['protocolos']=(_PAG['protocolos']||_PAG_TAMANHO)+_PAG_TAMANHO;
+  renderProtocolos(document.getElementById('content'));
 }
 
 // ── Número de protocolo formatado ──────────────────────────────────
@@ -7859,7 +8128,7 @@ function openProtocoloModal(id){
   _PROTO_PECAS=p.pecas?(p.pecas.map(function(x){return Object.assign({},x);})):[];
   if(_PROTO_PECAS.length===0) _PROTO_PECAS=[{id:1,descricao:'',servico:'conserto',peso:'',material:'18k',estado:'bom',obs:'',os_id:null}];
 
-  var collabs=DB.colaboradores.filter(function(c){return c.ativo;});
+  var collabs=DB.colaboradores.filter(function(c){return c.ativo!==false;});
   var colOpts=collabs.map(function(c){return '<option value="'+c.nome+'"'+(p.atendente===c.nome?' selected':'')+'>'+c.nome+'</option>';}).join('');
   colOpts+='<option value="Ana Lobão"'+(p.atendente==='Ana Lobão'?' selected':'')+'>Ana Lobão</option>';
 
@@ -7900,7 +8169,7 @@ function openProtocoloModal(id){
     </div>
     <div class="modal-footer">
       ${id&&podeExcluir()?'<button class="btn btn-danger" onclick="excluirProtocolo('+id+')">Excluir</button>':''}
-      <button class="btn btn-outline" onclick="closeModal(\'modal-proto\')">Cancelar</button>
+      <button class="btn btn-outline" onclick="closeModal('modal-proto')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveProtocolo(${id||0})">✦ Salvar e Gerar OS</button>
     </div>
   </div>`;
@@ -8019,16 +8288,17 @@ function saveProtocolo(id){
   var cid=parseInt(document.getElementById('proto-cl')?.value)||null;
   if(!cid){showToast('Selecione a cliente','danger');return;}
   if(_PROTO_PECAS.length===0){showToast('Adicione ao menos uma peça','danger');return;}
-  // Sync fields from DOM before save
-  _PROTO_PECAS.forEach(function(pc,i){
-    pc.descricao=document.getElementById('pp-desc-'+i)?.value||pc.descricao;
-    pc.servico=document.getElementById('pp-serv-'+i)?.value||pc.servico;
-    pc.peso=document.getElementById('pp-peso-'+i)?.value||pc.peso;
-    pc.material=document.getElementById('pp-mat-'+i)?.value||pc.material;
-    pc.estado=document.getElementById('pp-est-'+i)?.value||pc.estado;
-    pc.obs=document.getElementById('pp-obs-'+i)?.value||pc.obs;
-    if(!pc.descricao){showToast('Preencha a descrição da peça '+(i+1),'danger');return;}
-  });
+  // Sync fields from DOM before save — para no primeiro erro encontrado
+  for(var _i=0;_i<_PROTO_PECAS.length;_i++){
+    var _pc=_PROTO_PECAS[_i];
+    _pc.descricao=document.getElementById('pp-desc-'+_i)?.value||_pc.descricao;
+    _pc.servico=document.getElementById('pp-serv-'+_i)?.value||_pc.servico;
+    _pc.peso=document.getElementById('pp-peso-'+_i)?.value||_pc.peso;
+    _pc.material=document.getElementById('pp-mat-'+_i)?.value||_pc.material;
+    _pc.estado=document.getElementById('pp-est-'+_i)?.value||_pc.estado;
+    _pc.obs=document.getElementById('pp-obs-'+_i)?.value||_pc.obs;
+    if(!_pc.descricao){showToast('Preencha a descrição da peça '+(_i+1),'danger');return;}
+  }
   var invalid=_PROTO_PECAS.some(function(pc){return !pc.descricao;});
   if(invalid)return;
 
