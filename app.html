@@ -353,7 +353,6 @@ const LOGO_B64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0CAYAAADL
 const DB = {
   clientes:[],
   datas_importantes:[],
-  recebimentos:[],
   os:[],
   etapas:[],
   qc:[],
@@ -381,7 +380,7 @@ const DB = {
   fichas_tecnicas:[],
   protocolos:[],
   _ids:{
-    clientes:0,datas_importantes:0,recebimentos:0,os:0,etapas:0,qc:0,
+    clientes:0,datas_importantes:0,os:0,etapas:0,qc:0,
     orcamentos:0,propostas:0,entradas_ouro:0,vendas_credito:0,
     insumos:0,colecao:0,colecoes_atelier:0,financeiro:0,vendas:0,
     colaboradores:0,metas:0,cashback:0,uso_insumos_os:0,
@@ -416,7 +415,7 @@ const DB = {
   }
 };
 
-var DB_KEYS = ['clientes','datas_importantes','recebimentos','os','etapas','qc','orcamentos','propostas',
+var DB_KEYS = ['clientes','datas_importantes','os','etapas','qc','orcamentos','propostas',
   'entradas_ouro','vendas_credito','insumos','colecao','colecoes_atelier','financeiro','vendas',
   'colaboradores','metas','cashback','uso_insumos_os','movimentos_estoque','audit_log','romaneios','protocolos','equipes','personal_stylers','lotes_montagem','despesas','despesas_recorrentes','vendas_excluidas','metas_equipe'];
 var DB_OBJ_KEYS = ['atelier','params_reserva','params_custos_fixos','caixa','params_montagem'];
@@ -729,11 +728,11 @@ function loadDB(){
 
 const USERS_DEFAULT = [
   {user:'ana',  pass:'atelier2025',   nome:'Ana Lobão',role:'admin',     pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:true, pode_override_reserva:true, pode_orc_atelier:true, pode_fazer_qc:true,pode_aprovar_venda:true,pode_dispensar_lab:true},
-  {user:'deborah',pass:'deborah123',  nome:'Deborah',  role:'consultora',pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:true, pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:true},
-  {user:'natasha',pass:'natasha123',  nome:'Natasha',  role:'consultora',pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:true, pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:true},
-  {user:'mateus', pass:'mateus123',   nome:'Mateus',   role:'producao',  pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:false,pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:false},
-  {user:'luiz',   pass:'luiz123',     nome:'Luiz',     role:'producao',  pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:false,pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:false},
-  {user:'renata', pass:'financeiro123',nome:'Renata',  role:'financeiro',pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:false,pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:false},
+  {user:'deborah',pass:'atelier2025', nome:'Deborah',  role:'consultora',pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:true, pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:true},
+  {user:'natasha',pass:'atelier2025', nome:'Natasha',  role:'consultora',pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:true, pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:true},
+  {user:'mateus', pass:'atelier2025', nome:'Mateus',   role:'producao',  pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:false,pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:false},
+  {user:'luiz',   pass:'atelier2025', nome:'Luiz',     role:'producao',  pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:false,pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:false},
+  {user:'renata', pass:'atelier2025', nome:'Renata',   role:'financeiro',pode_excluir:false,pode_editar_vendas:false,pode_abrir_caixa:false,pode_override_reserva:false,pode_orc_atelier:false,pode_fazer_qc:false},
 ];
 // USERS é mutável e persiste no localStorage
 let USERS = (function(){
@@ -1063,10 +1062,10 @@ function migrateUsers(){
   if(changed)saveUsers();
 }
 const ROLES = {
-  admin:{label:'Administrador',modules:['dashboard','clientes','protocolos','recebimentos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','datas_clientes','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
-  comercial:{label:'Comercial',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
+  admin:{label:'Administrador',modules:['dashboard','clientes','protocolos','propostas','os','etapas','qc','insumos_os','insumos','colecao','produto','orcamentos','cashback','financeiro','vendas','metas','comissoes','datas_clientes','reserva_dash','receber_ouro','carteiras','historico_reserva','fichas','datas_clientes','nota_venda','montagem','romaneio','despesas','resultado','relatorios','caixa','acessos','vendas_excluidas'],verCusto:true,verMargem:true},
+  comercial:{label:'Comercial',modules:['dashboard','clientes','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda'],verCusto:false,verMargem:false},
   producao:{label:'Produção',modules:['dashboard','os','etapas','qc','insumos_os','insumos','fichas'],verCusto:false,verMargem:false},
-  consultora:{label:'Consultora',modules:['dashboard','clientes','recebimentos','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
+  consultora:{label:'Consultora',modules:['dashboard','clientes','propostas','orcamentos','protocolos','caixa','vendas','metas','comissoes','reserva_dash','carteiras','nota_venda','qc'],verCusto:false,verMargem:false},
   financeiro:{label:'Financeiro',modules:['dashboard','orcamentos','financeiro','despesas','cashback','metas','comissoes','reserva_dash','carteiras','historico_reserva','vendas_excluidas'],verCusto:true,verMargem:true},
 };
 let SESS = null;
@@ -1399,7 +1398,6 @@ const NAV_ITEMS = [
   {section:'Clientes & Atendimento'},
   {id:'clientes',icon:'◇',label:'Clientes'},
   {id:'protocolos',icon:'↧',label:'Protocolo de Entrada'},
-  {id:'recebimentos',icon:'↓',label:'Recebimentos'},
   {id:'propostas',icon:'✦',label:'Propostas'},
   {section:'Produção'},
   {id:'os',icon:'⊞',label:'Ordens de Serviço'},
@@ -1434,7 +1432,7 @@ const NAV_ITEMS = [
 
 let CUR_MOD = 'dashboard';
 const PAGE_TITLES = {
-  dashboard:'Dashboard',clientes:'Clientes',recebimentos:'Recebimentos',propostas:'Propostas',
+  dashboard:'Dashboard',clientes:'Clientes',propostas:'Propostas',
   os:'Ordens de Serviço',etapas:'Etapas de Produção',qc:'Controle de Qualidade',insumos_os:'Insumos por OS',
   insumos:'Insumos',colecao:'Coleção',produto:'Cadastrar Produto',
   orcamentos:'Orçamentos',cashback:'Cashback',financeiro:'Financeiro',
@@ -1650,7 +1648,7 @@ function navTo(mod){
 function renderModule(mod){
   const c=document.getElementById('content');
   const fns={
-    dashboard:renderDashboard,clientes:renderClientes,recebimentos:renderRecebimentos,propostas:renderPropostas,
+    dashboard:renderDashboard,clientes:renderClientes,propostas:renderPropostas,
     os:renderOS,etapas:renderEtapas,qc:renderQC,insumos_os:renderInsumosOS,
     insumos:renderInsumos,colecao:renderColecao,produto:renderProduto,
     orcamentos:renderOrcamentos,cashback:renderCashback,financeiro:renderFinanceiro,
@@ -1721,6 +1719,29 @@ function openModal(html){
   div.querySelector('.modal-overlay')?.remove();
   document.body.appendChild(div);
   return div;
+}
+
+// Modal genérico reutilizável — usado pelo Caixa, Override Reserva e avisos internos
+var _modalGenericoEl = null;
+function abrirModalGenerico(titulo, htmlConteudo){
+  fecharModal(); // fecha qualquer modal genérico aberto
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay';
+  ov.id = 'modal-generico';
+  ov.innerHTML = '<div class="modal modal-lg">'
+    + '<div class="modal-header">'
+    +   '<span class="modal-title">' + (titulo||'') + '</span>'
+    +   '<button class="modal-close" onclick="fecharModal()">×</button>'
+    + '</div>'
+    + '<div>' + (htmlConteudo||'') + '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  _modalGenericoEl = ov;
+}
+function fecharModal(){
+  var el = document.getElementById('modal-generico');
+  if(el) el.remove();
+  _modalGenericoEl = null;
 }
 
 
@@ -1947,7 +1968,6 @@ function excluirCliente(id){
     'Excluir',
     function(){
       DB.clientes=DB.clientes.filter(c=>c.id!==id);
-      DB.recebimentos=DB.recebimentos.filter(r=>r.cliente_id!==id);
       DB.os=DB.os.filter(o=>o.cliente_id!==id);
       DB.orcamentos=DB.orcamentos.filter(o=>o.cliente_id!==id);
       DB.propostas=DB.propostas.filter(p=>p.cliente_id!==id);
@@ -2450,85 +2470,6 @@ function switchTab(e,target){
   e.target.classList.add('active');
   const pane=modal.querySelector('#'+target);
   if(pane)pane.classList.add('active');
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// MODULE: RECEBIMENTOS
-// ═══════════════════════════════════════════════════════════════════
-function renderRecebimentos(c){
-  c.innerHTML=`
-  <div class="page-header">
-    <div><p class="page-title">Recebimentos</p><p class="page-sub">Peças recebidas para serviço</p></div>
-    <button class="btn btn-primary" onclick="openRecebModal()">+ Novo Recebimento</button>
-  </div>
-  <div class="table-wrap">
-    <table><thead><tr><th>Data</th><th>Cliente</th><th>Descrição</th><th>Tipo</th><th>Status</th><th>Ações</th></tr></thead>
-    <tbody>${DB.recebimentos.map(r=>`<tr>
-      <td>${fmtDate(r.data)}</td><td>${clienteNome(r.cliente_id)}</td>
-      <td>${r.descricao}</td>
-      <td><span class="badge badge-blue">${r.tipo}</span></td>
-      <td>${osBadge(r.status)}</td>
-      <td><div class="td-actions">
-        <button class="btn btn-xs btn-outline" onclick="openRecebModal(${r.id})">Editar</button>
-        ${podeExcluir()?`<button class="btn btn-xs btn-danger" onclick="excluirReceb(${r.id})">✕</button>`:''}
-      </div></td>
-    </tr>`).join('')||'<tr><td colspan="6" class="text-center text-suave" style="padding:32px">Nenhum recebimento</td></tr>'}</tbody>
-    </table>
-  </div>`;
-}
-function openRecebModal(id){
-  const r=id?DB.recebimentos.find(x=>x.id==id):{};
-  const div=document.createElement('div');div.className='modal-overlay';div.id='modal-receb';
-  div.innerHTML=`<div class="modal">
-    <div class="modal-header"><span class="modal-title">${id?'Editar':'Novo'} Recebimento</span><button class="modal-close" onclick="closeModal('modal-receb')">×</button></div>
-    <div class="modal-body">
-      <div class="form-grid" style="gap:14px">
-        <div class="form-group"><label>Cliente</label><select id="rb-cl">
-          ${DB.clientes.map(cl=>`<option value="${cl.id}" ${r.cliente_id==cl.id?'selected':''}>${cl.nome}</option>`).join('')}
-        </select></div>
-        <div class="form-group"><label>Data</label><input id="rb-data" type="date" value="${r.data||today()}"></div>
-        <div class="form-group"><label>Tipo</label><select id="rb-tipo">
-          <option value="conserto" ${r.tipo==='conserto'?'selected':''}>Conserto</option>
-          <option value="ressignificacao" ${r.tipo==='ressignificacao'?'selected':''}>Ressignificação</option>
-          <option value="avaliacao" ${r.tipo==='avaliacao'?'selected':''}>Avaliação</option>
-        </select></div>
-        <div class="form-group"><label>Status</label><select id="rb-status">
-          <option value="recebido" ${r.status==='recebido'?'selected':''}>Recebido</option>
-          <option value="em_producao" ${r.status==='em_producao'?'selected':''}>Em Produção</option>
-          <option value="concluido" ${r.status==='concluido'?'selected':''}>Concluído</option>
-        </select></div>
-      </div>
-      <div class="form-group mt-12"><label>Descrição da Peça</label><textarea id="rb-desc" rows="2">${r.descricao||''}</textarea></div>
-      <div class="form-grid mt-12" style="gap:14px">
-        <div class="form-group"><label>Peso Entregue</label><input id="rb-peso" value="${r.peso_entregue||''}" placeholder="ex: 4.2g"></div>
-        <div class="form-group"><label>Obs.</label><input id="rb-obs" value="${r.obs||''}"></div>
-      </div>
-    </div>
-    <div class="modal-footer"><button class="btn btn-outline" onclick="closeModal('modal-receb')">Cancelar</button><button class="btn btn-primary" onclick="saveReceb(${id||0})">Salvar</button></div>
-  </div>`;
-  document.body.appendChild(div);
-}
-function saveReceb(id){
-  const obj={id:id||DB.nextId('recebimentos'),
-    cliente_id:parseInt(document.getElementById('rb-cl').value),
-    data:document.getElementById('rb-data').value,
-    tipo:document.getElementById('rb-tipo').value,
-    status:document.getElementById('rb-status').value,
-    descricao:document.getElementById('rb-desc').value,
-    peso_entregue:document.getElementById('rb-peso').value,
-    obs:document.getElementById('rb-obs').value,
-  };
-  if(id){const i=DB.recebimentos.findIndex(r=>r.id==id);if(i>=0)DB.recebimentos[i]=obj;}
-  else DB.recebimentos.push(obj);
-  saveDB();closeModal('modal-receb');showToast('Recebimento salvo');
-  renderRecebimentos(document.getElementById('content'));
-}
-function excluirReceb(id){
-  confirmarAcao('Excluir recebimento?','Este registro será removido permanentemente.','Excluir',function(){
-    DB.recebimentos=DB.recebimentos.filter(r=>r.id!==id);
-    saveDB();showToast('Recebimento excluído');
-    renderRecebimentos(document.getElementById('content'));
-  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3598,7 +3539,6 @@ function editColecao(id){
         <div class="form-group" style="grid-column:1/-1"><label>Coleção do Atelier</label>
           <select id="ec-colecao">${colOpts}</select></div>
       </div>
-    </div>
     </div>
     <!-- Certificados -->
     <div class="modal-body" style="border-top:1px solid var(--borda);padding-top:16px">
@@ -5792,8 +5732,8 @@ function openAtelierModal(){
         <div class="form-group"><label>Endereço</label><input id="at-end" type="text" value="${a.endereco||''}"></div>
         <div class="form-group"><label>Bairro</label><input id="at-bairro" type="text" value="${a.bairro||''}"></div>
         <div class="form-group"><label>CEP</label><input id="at-cep" type="text" value="${a.cep||''}" placeholder="00000-000"></div>
-        <div class="form-group"><label>Cidade</label><input id="at-cidade" type="text" value="${a.cidade||'São Paulo'}"></div>
-        <div class="form-group"><label>UF</label><input id="at-uf" type="text" value="${a.uf||'SP'}" maxlength="2" style="text-transform:uppercase"></div>
+        <div class="form-group"><label>Cidade</label><input id="at-cidade" type="text" value="${a.cidade||'Teresina'}"></div>
+        <div class="form-group"><label>UF</label><input id="at-uf" type="text" value="${a.uf||'PI'}" maxlength="2" style="text-transform:uppercase"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -5819,8 +5759,8 @@ function saveAtelierConfig(){
   DB.atelier.endereco = (document.getElementById('at-end')?.value||'').trim();
   DB.atelier.bairro = (document.getElementById('at-bairro')?.value||'').trim();
   DB.atelier.cep = (document.getElementById('at-cep')?.value||'').trim();
-  DB.atelier.cidade = (document.getElementById('at-cidade')?.value||'São Paulo').trim();
-  DB.atelier.uf = (document.getElementById('at-uf')?.value||'SP').trim().toUpperCase();
+  DB.atelier.cidade = (document.getElementById('at-cidade')?.value||'Teresina').trim();
+  DB.atelier.uf = (document.getElementById('at-uf')?.value||'PI').trim().toUpperCase();
   saveDB();
   closeModal('modal-atelier');
   showToast('Dados do atelier salvos com sucesso!');
@@ -7244,7 +7184,6 @@ function gerarReciboOS(osId){
   var cl=os.cliente_id?DB.clientes.find(function(c){return c.id==os.cliente_id;}):null;
   var col=os.colecao_atelier_id?DB.colecoes_atelier.find(function(c){return c.id==os.colecao_atelier_id;}):null;
   var orc=os.orcamento_id?DB.orcamentos.find(function(o){return o.id==os.orcamento_id;}):null;
-  var rec=os.recebimento_id?DB.recebimentos.find(function(r){return r.id==os.recebimento_id;}):null;
   var etapasOS=(DB.etapas||[]).filter(function(e){return e.os_id==osId;});
 
   var PRIORITY_LABEL={normal:'Normal',alta:'Alta ⚠',urgente:'URGENTE 🔴'};
@@ -7303,7 +7242,6 @@ function gerarReciboOS(osId){
   grid.appendChild(infoRow('Prazo', os.prazo?fmtDate(os.prazo):'Sem prazo definido'));
   grid.appendChild(infoRow('Responsável', os.responsavel||'—'));
   if(orc) grid.appendChild(infoRow('Orçamento vinculado','#'+orc.id+' · '+(orc.descricao||orc.tipo||''),true));
-  if(rec) grid.appendChild(infoRow('Recebimento','#'+rec.id+' · '+(rec.descricao||'')+' · '+rec.peso_entregue,true));
   wrap.appendChild(grid);
 
   // ── Descrição do serviço ──
@@ -7851,9 +7789,12 @@ function gerarReciboProtocolo(pid){
           return '<span style="font-size:8pt;color:#555">📄 '+esc(f.nome)+'</span>';
         }).join('')
         +'</div>';
-      trFoto.appendChild(tdFoto);tbody.appendChild(trFoto);
+      trFoto.appendChild(tdFoto);
+      tbody.appendChild(tr);   // peça primeiro
+      tbody.appendChild(trFoto); // foto depois
+    } else {
+      tbody.appendChild(tr);
     }
-    tbody.appendChild(tr);
   });
   table.appendChild(tbody);
   wrap.appendChild(table);
