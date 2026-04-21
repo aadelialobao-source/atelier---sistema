@@ -433,6 +433,7 @@ DB.nextId = function(key){
 
 
 function saveDB(){
+  _lastSaveTs = Date.now(); // marca timestamp para detector de race condition
   try{
     var snap={_ids:JSON.parse(JSON.stringify(DB._ids))};
     DB_KEYS.forEach(function(k){if(DB[k]!==undefined)snap[k]=DB[k];});
@@ -1419,12 +1420,7 @@ window.addEventListener('storage', function(e){
   }
 });
 // Marca timestamp a cada saveDB para o detector acima
-const _saveDBOriginal = saveDB;
-// Sobrescrita segura — registra o momento do save local
-function saveDB(){
-  _lastSaveTs = Date.now();
-  _saveDBOriginal();
-}
+// _lastSaveTs é atualizado diretamente dentro de saveDB() acima.
 function canAccess(mod){
   if(!SESS) return false;
   const role=ROLES[SESS.role];
@@ -1510,7 +1506,7 @@ function initApp(){
     const last=localStorage.getItem(tsKey);
     const hoje=today();
     if(!last||last<hoje){
-      setTimeout(()=>buscarCotacaoOuro(false),1500); // silencioso
+      setTimeout(function(){buscarCotacaoOuro(false);},2000); // busca silenciosa ao iniciar
     }
   }catch(e){}
 }
@@ -1519,54 +1515,74 @@ function initApp(){
 // COTAÇÃO DO OURO — Atualização automática + manual
 // ═══════════════════════════════════════════════════════════════════
 function buscarCotacaoOuro(mostrarFeedback){
-  mostrarFeedback=mostrarFeedback!==false;
-  const btn=document.getElementById('btn-atualizar-cotacao');
+  mostrarFeedback = mostrarFeedback !== false;
+  var btn = document.getElementById('btn-atualizar-cotacao');
+  var statusEl = document.getElementById('cotacao-status');
   if(btn){btn.disabled=true;btn.textContent='Buscando…';}
-  const statusEl=document.getElementById('cotacao-status');
-  if(statusEl)statusEl.textContent='Buscando cotação…';
+  if(statusEl) statusEl.textContent = 'Buscando cotação…';
 
-  // jsDelivr CDN (fawazahmed0/currency-api) — sem CORS em qualquer ambiente iOS/Android/PWA
-  // xau.json: { xau: { brl: <preço 1 troy oz em BRL> } }
-  // usd.json: { usd: { brl: <câmbio 1 USD em BRL> } }
-  function _aplicarCotacao(xauData, usdData, sufixo){
-    const xauBrl = xauData?.xau?.brl;
-    const usdBrl = usdData?.usd?.brl;
-    if(!xauBrl || xauBrl<100) throw new Error('Valor XAU inválido');
-    const au24k = parseFloat((xauBrl/31.1035).toFixed(2));
-    const dolar = parseFloat((usdBrl||DB.params_reserva.dolar).toFixed(4));
-    DB.params_reserva.au24k=au24k; DB.params_reserva.dolar=dolar;
-    ORC.params.au24k=au24k; ORC.params.dolar=dolar;
+  function _aplicar(au24k, dolar, fonte){
+    if(!au24k||au24k<50) throw new Error('Au inválido: '+au24k);
+    au24k = parseFloat(au24k.toFixed(2));
+    dolar = parseFloat((dolar||DB.params_reserva.dolar).toFixed(4));
+    DB.params_reserva.au24k = au24k;
+    DB.params_reserva.dolar = dolar;
+    ORC.params.au24k = au24k;
+    ORC.params.dolar = dolar;
     saveDB();
-    const agora=new Date().toLocaleString('pt-BR')+(sufixo||'');
-    try{localStorage.setItem('atelier_cotacao_ts',today());
-        localStorage.setItem('atelier_cotacao_hora',agora);}catch(e){}
-    _renderCotacaoWidget(au24k,dolar,agora,'online');
-    if(mostrarFeedback)showToast('✦ Cotação atualizada · Au 24k = '+fmt(au24k)+'/g · Dólar = R$ '+fmtN(dolar,2),'success');
+    var agora = new Date().toLocaleString('pt-BR')+' ('+fonte+')';
+    try{
+      localStorage.setItem('atelier_cotacao_ts', today());
+      localStorage.setItem('atelier_cotacao_hora', agora);
+    }catch(e){}
+    _renderCotacaoWidget(au24k, dolar, agora, 'online');
+    if(mostrarFeedback)
+      showToast('❆ Au 24k = '+fmt(au24k)+'/g · Dólar = R$ '+fmtN(dolar,2),'success');
+    if(btn){btn.disabled=false;btn.textContent='↻ Atualizar cotação';}
   }
 
-  function _fetchDia(dia, sufixo){
-    const base='https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@'+dia+'/v1/currencies/';
-    return Promise.all([
-      fetch(base+'xau.json').then(r=>r.json()),
-      fetch(base+'usd.json').then(r=>r.json())
-    ]).then(([x,u])=>_aplicarCotacao(x,u,sufixo));
+  // AwesomeAPI: 1 request retorna XAU e USD juntos — sem CORS em Chrome/Edge/Firefox
+  // URL do proxy encapsula para resolver CORS no Safari/iOS/WebKit
+  var API_URL = 'https://economia.awesomeapi.com.br/json/last/XAU-BRL,USD-BRL';
+  var PROXY_URL = 'https://corsproxy.io/?' + encodeURIComponent(API_URL);
+
+  function _parsear(data){
+    var xau = data.XAUBRL || data['XAU-BRL'] || {};
+    var usd = data.USDBRL || data['USD-BRL'] || {};
+    var bidOz = parseFloat(xau.bid || xau.ask || 0);
+    var dolar  = parseFloat(usd.bid || usd.ask || 0);
+    if(!bidOz||bidOz<500) throw new Error('bidOz inválido: '+bidOz);
+    if(!dolar||dolar<3)   throw new Error('dolar inválido: '+dolar);
+    return {au24k: bidOz/31.1035, dolar: dolar};
   }
 
-  const hoje=today();
-  const ontem=new Date(Date.now()-86400000).toISOString().split('T')[0];
-
-  _fetchDia(hoje,'')
-    .catch(()=>_fetchDia(ontem,' (ontem)'))
-    .catch(err=>{
-      console.warn('Cotação automática falhou:',err);
-      if(mostrarFeedback)showToast('Não foi possível buscar a cotação. Use o botão Manual.','warn');
-      if(statusEl)statusEl.textContent='Falha ao buscar — use o botão Manual';
+  // Tentativa 1: direto (funciona em Chrome/Edge/Firefox no desktop)
+  fetch(API_URL)
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(data){
+      var v = _parsear(data);
+      _aplicar(v.au24k, v.dolar, 'AwesomeAPI');
     })
-    .finally(()=>{
-      if(btn){btn.disabled=false;btn.textContent='↻ Atualizar agora';}
+    .catch(function(e1){
+      console.warn('[Cotação] Direto falhou ('+e1.message+') — tentando proxy…');
+      // Tentativa 2: via corsproxy.io (resolve CORS no Safari/iOS/WebKit)
+      fetch(PROXY_URL)
+        .then(function(r){ if(!r.ok) throw new Error('proxy HTTP '+r.status); return r.json(); })
+        .then(function(data){
+          var v = _parsear(data);
+          _aplicar(v.au24k, v.dolar, 'AwesomeAPI/proxy');
+        })
+        .catch(function(e2){
+          console.warn('[Cotação] Proxy também falhou ('+e2.message+') — abrindo manual');
+          if(btn){btn.disabled=false;btn.textContent='✎ Inserir cotação';}
+          if(statusEl) statusEl.textContent = '⚠ Sem conexão — insira manualmente';
+          // Abre modal manual automaticamente
+          setTimeout(function(){
+            if(mostrarFeedback) abrirCotacaoManual();
+          }, 400);
+        });
     });
 }
-
 function _renderCotacaoWidget(au24k,dolar,hora,origem){
   const w=document.getElementById('cotacao-widget');if(!w)return;
   const au18k=au24k*0.75*(1-DB.params_reserva.perda/100);
@@ -1592,7 +1608,7 @@ function _renderCotacaoWidget(au24k,dolar,hora,origem){
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
         <div style="display:flex;gap:8px">
-          <button id="btn-atualizar-cotacao" class="btn btn-sm" style="background:rgba(176,142,86,.25);color:var(--ouro-claro);border:1px solid rgba(176,142,86,.4)" onclick="buscarCotacaoOuro(true)">↻ Atualizar agora</button>
+          <button id="btn-atualizar-cotacao" class="btn btn-sm" style="background:rgba(176,142,86,.25);color:var(--ouro-claro);border:1px solid rgba(176,142,86,.4)" onclick="buscarCotacaoOuro(true)">↻ Atualizar cotação</button>
           <button class="btn btn-sm" style="background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.15)" onclick="abrirCotacaoManual()">✎ Manual</button>
         </div>
         <p id="cotacao-status" style="font-size:11px;color:rgba(176,142,86,.5);letter-spacing:.04em">${origem==='online'?'🟢':'⚙️'} Atualizado ${hora||'—'}</p>
