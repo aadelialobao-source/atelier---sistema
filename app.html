@@ -2796,14 +2796,47 @@ function renderEtapas(c){
               ${DB.etapas.filter(e=>e.setor===setor&&e.status===s).map(e=>`
                 <div class="kanban-card" onclick="openEtapaModal(${e.id})">
                   <div class="kanban-card-title">OS #${e.os_id} — ${e.descricao.substring(0,36)}${e.descricao.length>36?'…':''}</div>
-                  <div class="kanban-card-sub">${e.responsavel||'—'}</div>
-                  ${e.inclui_acabamento?`<div style="margin-top:6px"><span class="badge badge-gold" style="font-size:10px">Acabamento incluído</span></div>`:''}
+                  <div class="kanban-card-sub">👤 ${e.responsavel||'—'}</div>
+                  ${e.inclui_acabamento?`<div style="margin-top:4px"><span class="badge badge-gold" style="font-size:10px">Acabamento incluído</span></div>`:''}
+                  ${e.data_ini?`<div style="font-size:10px;color:var(--texto-suave);margin-top:4px">Início: ${fmtDate(e.data_ini)}</div>`:''}
+                  <!-- Botões de protocolo — stopPropagation para não abrir modal -->
+                  <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
+                    ${s==='aguardando'?`<button class="btn btn-xs btn-gold" onclick="etapaReceberDemanda(${e.id})" title="Marcar como recebida e imprimir protocolo">📋 Receber</button>`:''}
+                    ${s==='em_andamento'?`<button class="btn btn-xs btn-green" onclick="etapaConcluirDemanda(${e.id})" title="Marcar como concluída e imprimir protocolo">✦ Concluir</button>`:''}
+                    ${s==='concluida'?`<button class="btn btn-xs btn-outline" onclick="gerarProtocoloConclusaoEtapa(${e.id})" style="font-size:11px">🖨 Conclusão</button>`:''}
+                    <button class="btn btn-xs btn-outline" onclick="gerarReciboRecebimentoEtapa(${e.id})" style="font-size:11px" title="Imprimir recibo de demanda">🖨 Demanda</button>
+                  </div>
                 </div>`).join('')||`<p style="font-size:12px;color:var(--texto-suave);text-align:center;padding:16px">Vazio</p>`}
             </div>
           </div>`).join('')}
       </div>
     </div>`).join('')}`;
 }
+
+// Botão "Receber" — muda status para em_andamento e imprime protocolo de recebimento
+function etapaReceberDemanda(id){
+  var et=DB.etapas.find(function(e){return e.id==id;});
+  if(!et)return;
+  et.status='em_andamento';
+  et.data_ini=today();
+  saveDB();
+  showToast('Demanda recebida por '+( et.responsavel||'responsável')+'  ✓');
+  renderEtapas(document.getElementById('content'));
+  setTimeout(function(){gerarReciboRecebimentoEtapa(id);},300);
+}
+
+// Botão "Concluir" — muda status para concluida e imprime protocolo de conclusão
+function etapaConcluirDemanda(id){
+  var et=DB.etapas.find(function(e){return e.id==id;});
+  if(!et)return;
+  et.status='concluida';
+  et.data_fim=today();
+  saveDB();
+  showToast('Etapa concluída ✓');
+  renderEtapas(document.getElementById('content'));
+  setTimeout(function(){gerarProtocoloConclusaoEtapa(id);},300);
+}
+
 function openEtapaModal(id){
   const e=id?DB.etapas.find(x=>x.id==id):{};
   const div=document.createElement('div');div.className='modal-overlay';div.id='modal-etapa';
@@ -2818,7 +2851,13 @@ function openEtapaModal(id){
           <option value="ourivesaria" ${e.setor==='ourivesaria'?'selected':''}>Ourivesaria</option>
           <option value="montagem" ${e.setor==='montagem'?'selected':''}>Montagem</option>
         </select></div>
-        <div class="form-group"><label>Responsável</label><input id="et-resp" value="${e.responsavel||''}"></div>
+        <div class="form-group"><label>Responsável</label>
+          <select id="et-resp">
+            <option value="">— Selecione —</option>
+            ${DB.colaboradores.filter(c=>c.ativo).map(c=>`<option value="${c.nome}" ${e.responsavel===c.nome?'selected':''}>${c.nome} · ${c.cargo||''}</option>`).join('')}
+            <option value="Ana Lobão" ${e.responsavel==='Ana Lobão'?'selected':''}>Ana Lobão · Gerência</option>
+          </select>
+        </div>
         <div class="form-group"><label>Status</label><select id="et-status">
           <option value="aguardando" ${e.status==='aguardando'?'selected':''}>Aguardando</option>
           <option value="em_andamento" ${e.status==='em_andamento'?'selected':''}>Em Andamento</option>
@@ -2834,27 +2873,347 @@ function openEtapaModal(id){
     </div>
     <div class="modal-footer">
       ${id?`<button class="btn btn-danger" onclick="excluirEtapa(${id})">Excluir</button>`:''}
+      ${id?`<button class="btn btn-outline" onclick="closeModal('modal-etapa');gerarReciboRecebimentoEtapa(${id})" title="Imprimir protocolo de demanda">🖨 Demanda</button>`:''}
+      ${id&&e.status==='concluida'?`<button class="btn btn-outline" onclick="closeModal('modal-etapa');gerarProtocoloConclusaoEtapa(${id})" title="Imprimir protocolo de conclusão">🖨 Conclusão</button>`:''}
       <button class="btn btn-outline" onclick="closeModal('modal-etapa')">Cancelar</button>
       <button class="btn btn-primary" onclick="saveEtapa(${id||0})">Salvar</button>
     </div>
   </div>`;
   document.body.appendChild(div);
 }
+
 function saveEtapa(id){
-  const obj={id:id||DB.nextId('etapas'),os_id:parseInt(document.getElementById('et-os').value),
-    setor:document.getElementById('et-setor').value,responsavel:document.getElementById('et-resp').value,
-    status:document.getElementById('et-status').value,descricao:document.getElementById('et-desc').value,
+  var novoStatus=document.getElementById('et-status').value;
+  var etAnterior=id?DB.etapas.find(function(e){return e.id==id;}):null;
+  var dataIni=(etAnterior&&etAnterior.data_ini)||null;
+  var dataFim=(etAnterior&&etAnterior.data_fim)||null;
+  // Registra timestamps automaticamente na mudança de status
+  if(novoStatus==='em_andamento'&&(!etAnterior||etAnterior.status==='aguardando')) dataIni=today();
+  if(novoStatus==='concluida'&&(!etAnterior||etAnterior.status!=='concluida')) dataFim=today();
+  const obj={
+    id:id||DB.nextId('etapas'),
+    os_id:parseInt(document.getElementById('et-os').value),
+    setor:document.getElementById('et-setor').value,
+    responsavel:document.getElementById('et-resp').value,
+    status:novoStatus,
+    descricao:document.getElementById('et-desc').value,
     inclui_acabamento:document.getElementById('et-acab').checked,
-    obs_acabamento:document.getElementById('et-obs-acab').value,data_ini:null,data_fim:null};
+    obs_acabamento:document.getElementById('et-obs-acab').value,
+    data_ini:dataIni,
+    data_fim:dataFim
+  };
+  var isNovaConclusao=novoStatus==='concluida'&&(!etAnterior||etAnterior.status!=='concluida');
   if(id){const i=DB.etapas.findIndex(e=>e.id==id);if(i>=0)DB.etapas[i]=obj;}else DB.etapas.push(obj);
-  saveDB();closeModal('modal-etapa');showToast('Etapa salva');renderEtapas(document.getElementById('content'));
+  saveDB();closeModal('modal-etapa');showToast('Etapa salva');
+  renderEtapas(document.getElementById('content'));
+  // Se acabou de marcar como concluída, oferece imprimir protocolo de conclusão
+  if(isNovaConclusao){
+    setTimeout(function(){gerarProtocoloConclusaoEtapa(obj.id);},400);
+  }
 }
+
 function excluirEtapa(id){
   confirmarAcao('Excluir etapa?','Esta etapa será removida permanentemente.','Excluir',function(){
     DB.etapas=DB.etapas.filter(e=>e.id!==id);
     saveDB();closeModal('modal-etapa');showToast('Etapa excluída');
     renderEtapas(document.getElementById('content'));
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROTOCOLO DE RECEBIMENTO DE DEMANDA — para o responsável pela etapa
+// Impresso quando a etapa é recebida (aguardando → em andamento)
+// ═══════════════════════════════════════════════════════════════════
+function gerarReciboRecebimentoEtapa(etapaId){
+  var et=DB.etapas.find(function(e){return e.id==etapaId;});
+  if(!et){showToast('Etapa não encontrada','danger');return;}
+  var os=DB.os.find(function(o){return o.id==et.os_id;})||{};
+  var at=DB.atelier||{};
+  var cl=os.cliente_id?DB.clientes.find(function(c){return c.id==os.cliente_id;}):null;
+  var col=os.colecao_atelier_id?DB.colecoes_atelier.find(function(c){return c.id==os.colecao_atelier_id;}):null;
+  var fotos=(os.fotos||[]).filter(function(f){return f&&(f.src||typeof f==='string');});
+  var STATUS_LABEL={orcamento:'Orçamento',producao:'Em Produção',aprovado:'Aprovado',concluido:'Concluído',entregue:'Entregue',cancelado:'Cancelado'};
+  var SETOR_LABEL={ourivesaria:'⚒ Ourivesaria',montagem:'◈ Montagem'};
+
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px';
+
+  var wrap=document.createElement('div');
+  wrap.id='recibo-demanda-print';
+  wrap.style.cssText='background:#fff;width:148mm;min-height:210mm;padding:13mm 12mm;font-family:Jost,sans-serif;font-size:11pt;color:#1a1a2e;box-shadow:0 4px 32px rgba(0,0,0,.4);margin:auto';
+
+  // Header
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #0D1F2D;padding-bottom:10px;margin-bottom:12px';
+  var hL=document.createElement('div');
+  hL.innerHTML='<div style="font-family:\'Cormorant Garamond\',serif;font-size:17pt;font-weight:600;color:#0D1F2D;line-height:1">'+(at.nome_fantasia||'Atelier Ana Lobão')+'</div>'
+    +'<div style="font-size:8pt;color:#666;margin-top:2px">Showroom privativo · Joias autorais em ouro 18k</div>'
+    +(at.endereco?'<div style="font-size:8pt;color:#555;margin-top:2px">'+at.endereco+(at.bairro?', '+at.bairro:'')+(at.cidade?' · '+at.cidade+'/'+at.uf:'')+'</div>':'');
+  var hR=document.createElement('div');
+  hR.style.cssText='text-align:right;min-width:110px';
+  hR.innerHTML='<div style="font-size:8pt;color:#888;letter-spacing:.06em;text-transform:uppercase">Protocolo de Demanda</div>'
+    +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:20pt;font-weight:700;color:#0D1F2D;line-height:1">OS #'+et.os_id+'</div>'
+    +'<div style="font-size:8pt;color:#666">'+fmtDate(today())+'</div>';
+  hdr.appendChild(hL);hdr.appendChild(hR);wrap.appendChild(hdr);
+
+  // Faixa título
+  var faixa=document.createElement('div');
+  faixa.style.cssText='background:#0D1F2D;color:#B08E56;padding:7px 14px;border-radius:4px;font-size:10pt;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center';
+  faixa.innerHTML='<span>📋 Protocolo de Recebimento de Demanda</span>'
+    +'<span style="font-size:9pt;letter-spacing:.04em">'+( SETOR_LABEL[et.setor]||et.setor)+'</span>';
+  wrap.appendChild(faixa);
+
+  // Grid de info
+  function infoBox(lbl,val,full){
+    var d=document.createElement('div');
+    d.style.cssText='background:#f7f5f0;border-radius:4px;padding:7px 10px;'+(full?'grid-column:1/-1':'');
+    d.innerHTML='<div style="font-size:7.5pt;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">'+lbl+'</div>'
+      +'<div style="font-size:10.5pt;font-weight:600;color:#1a1a2e">'+(val||'—')+'</div>';
+    return d;
+  }
+  var grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px';
+  grid.appendChild(infoBox('Para (responsável)', et.responsavel?'👤 '+et.responsavel:'Não definido', true));
+  grid.appendChild(infoBox('Cliente / Origem', os.origem==='atelier'?'🏛 '+(col?col.nome:'Coleção Atelier'):(cl?cl.nome:'—')));
+  grid.appendChild(infoBox('Status OS', STATUS_LABEL[os.status]||os.status));
+  grid.appendChild(infoBox('Prazo OS', os.prazo?fmtDate(os.prazo):'Sem prazo'));
+  if(et.data_ini) grid.appendChild(infoBox('Recebido em', fmtDate(et.data_ini)));
+  wrap.appendChild(grid);
+
+  // Descrição do serviço (OS)
+  var secServ=document.createElement('div');
+  secServ.style.cssText='margin-bottom:12px';
+  var titServ=document.createElement('div');
+  titServ.style.cssText='font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0D1F2D;border-bottom:1px solid #ddd;padding-bottom:3px;margin-bottom:7px';
+  titServ.textContent='Descrição do Serviço (OS)';
+  var bodyServ=document.createElement('div');
+  bodyServ.style.cssText='font-size:11pt;line-height:1.5;padding:9px 12px;border-left:3px solid #B08E56;background:#fdf9f3;border-radius:0 4px 4px 0';
+  bodyServ.textContent=os.descricao||'—';
+  secServ.appendChild(titServ);secServ.appendChild(bodyServ);wrap.appendChild(secServ);
+
+  // Instrução da etapa
+  var secEt=document.createElement('div');
+  secEt.style.cssText='margin-bottom:12px';
+  var titEt=document.createElement('div');
+  titEt.style.cssText='font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0D1F2D;border-bottom:1px solid #ddd;padding-bottom:3px;margin-bottom:7px';
+  titEt.textContent='Instrução desta Etapa';
+  var bodyEt=document.createElement('div');
+  bodyEt.style.cssText='font-size:11pt;line-height:1.5;padding:9px 12px;border-left:3px solid #0D1F2D;background:#f0f4f8;border-radius:0 4px 4px 0';
+  bodyEt.textContent=et.descricao||'—';
+  secEt.appendChild(titEt);secEt.appendChild(bodyEt);wrap.appendChild(secEt);
+
+  // Acabamento (se houver)
+  if(et.inclui_acabamento){
+    var secAcab=document.createElement('div');
+    secAcab.style.cssText='margin-bottom:12px;background:#fef9ec;border:1px solid #e8c84a;border-radius:5px;padding:8px 12px';
+    secAcab.innerHTML='<div style="font-size:8pt;font-weight:700;color:#8a6700;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">⚠ Inclui Acabamento</div>'
+      +'<div style="font-size:10.5pt;color:#5a4200">'+(et.obs_acabamento||'Polimento / rhodium — conforme combinado')+'</div>';
+    wrap.appendChild(secAcab);
+  }
+
+  // Fotos da OS
+  if(fotos.length>0){
+    var secFoto=document.createElement('div');
+    secFoto.style.cssText='margin-bottom:12px';
+    var titFoto=document.createElement('div');
+    titFoto.style.cssText='font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0D1F2D;border-bottom:1px solid #ddd;padding-bottom:3px;margin-bottom:7px';
+    titFoto.textContent='Referências Fotográficas';
+    secFoto.appendChild(titFoto);
+    var rowFoto=document.createElement('div');
+    rowFoto.style.cssText='display:flex;flex-wrap:wrap;gap:8px';
+    fotos.slice(0,6).forEach(function(f){
+      var src=typeof f==='string'?f:(f.src||'');
+      if(!src)return;
+      var img=document.createElement('img');
+      img.src=src;
+      img.style.cssText='width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ddd';
+      rowFoto.appendChild(img);
+    });
+    secFoto.appendChild(rowFoto);wrap.appendChild(secFoto);
+  }
+
+  // Obs livres
+  var secObs=document.createElement('div');
+  secObs.style.cssText='margin-bottom:16px';
+  var titObs=document.createElement('div');
+  titObs.style.cssText='font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0D1F2D;border-bottom:1px solid #ddd;padding-bottom:3px;margin-bottom:7px';
+  titObs.textContent='Observações / Anotações';
+  var boxObs=document.createElement('div');
+  boxObs.style.cssText='border:1px solid #ccc;border-radius:4px;min-height:48px;padding:8px 10px;font-size:9pt;color:#bbb';
+  boxObs.textContent='(espaço para anotações durante a execução)';
+  secObs.appendChild(titObs);secObs.appendChild(boxObs);wrap.appendChild(secObs);
+
+  // Assinaturas
+  var sigs=document.createElement('div');
+  sigs.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:auto;padding-top:10px;border-top:1px solid #ddd';
+  function sig(lbl){
+    var d=document.createElement('div');d.style.textAlign='center';
+    var ln=document.createElement('div');ln.style.cssText='border-top:1.5px solid #0D1F2D;margin-bottom:5px;margin-top:30px';
+    var lb=document.createElement('div');lb.style.cssText='font-size:8.5pt;color:#555';lb.textContent=lbl;
+    d.appendChild(ln);d.appendChild(lb);return d;
+  }
+  sigs.appendChild(sig('Entregue por (responsável atelier)'));
+  sigs.appendChild(sig((et.responsavel||'Responsável pela etapa')+' · Recebi e estou ciente'));
+  wrap.appendChild(sigs);
+
+  // Rodapé
+  var rod=document.createElement('div');
+  rod.style.cssText='margin-top:10px;text-align:center;font-size:7pt;color:#bbb;border-top:1px solid #eee;padding-top:6px';
+  rod.textContent=(at.nome_fantasia||'Atelier Ana Lobão')+' · Protocolo de Demanda · OS #'+et.os_id+' · Etapa: '+(et.setor||'')+' · '+fmtDate(today());
+  wrap.appendChild(rod);
+
+  // Botões
+  var btnBar=document.createElement('div');
+  btnBar.style.cssText='position:sticky;bottom:0;background:rgba(0,0,0,.85);padding:12px 20px;display:flex;gap:10px;justify-content:center;margin-top:16px;border-radius:8px';
+  var btnP=document.createElement('button');btnP.className='btn btn-primary';btnP.style.fontSize='15px';
+  btnP.textContent='🖨 Imprimir / Salvar PDF';
+  btnP.onclick=function(){
+    var s=document.createElement('style');s.id='prd';
+    s.textContent='@media print{body>*{display:none!important}#recibo-demanda-print{display:block!important;position:static!important;box-shadow:none!important;width:148mm!important;min-height:210mm!important;margin:0!important;padding:13mm 12mm!important}}';
+    document.head.appendChild(s);window.print();
+    setTimeout(function(){var x=document.getElementById('prd');if(x)x.remove();},1000);
+  };
+  var btnF=document.createElement('button');btnF.className='btn btn-outline';
+  btnF.style.cssText='color:#fff;border-color:#fff';btnF.textContent='× Fechar';
+  btnF.onclick=function(){ov.remove();};
+  btnBar.appendChild(btnP);btnBar.appendChild(btnF);
+  ov.appendChild(wrap);ov.appendChild(btnBar);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROTOCOLO DE DEMANDA ATENDIDA — gerado quando etapa é concluída
+// Documenta o que foi feito e quem recebe a próxima etapa
+// ═══════════════════════════════════════════════════════════════════
+function gerarProtocoloConclusaoEtapa(etapaId){
+  var et=DB.etapas.find(function(e){return e.id==etapaId;});
+  if(!et){showToast('Etapa não encontrada','danger');return;}
+  var os=DB.os.find(function(o){return o.id==et.os_id;})||{};
+  var at=DB.atelier||{};
+  var cl=os.cliente_id?DB.clientes.find(function(c){return c.id==os.cliente_id;}):null;
+  var col=os.colecao_atelier_id?DB.colecoes_atelier.find(function(c){return c.id==os.colecao_atelier_id;}):null;
+  var SETOR_LABEL={ourivesaria:'⚒ Ourivesaria',montagem:'◈ Montagem'};
+  // Próxima etapa pendente da mesma OS
+  var proximaEtapa=DB.etapas.find(function(e){
+    return e.os_id==et.os_id && e.id!==et.id && e.status!=='concluida';
+  })||null;
+
+  var ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.75);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px';
+
+  var wrap=document.createElement('div');
+  wrap.id='recibo-conclusao-print';
+  wrap.style.cssText='background:#fff;width:148mm;min-height:210mm;padding:13mm 12mm;font-family:Jost,sans-serif;font-size:11pt;color:#1a1a2e;box-shadow:0 4px 32px rgba(0,0,0,.4);margin:auto';
+
+  // Header
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #2A5C3F;padding-bottom:10px;margin-bottom:12px';
+  var hL=document.createElement('div');
+  hL.innerHTML='<div style="font-family:\'Cormorant Garamond\',serif;font-size:17pt;font-weight:600;color:#0D1F2D;line-height:1">'+(at.nome_fantasia||'Atelier Ana Lobão')+'</div>'
+    +'<div style="font-size:8pt;color:#666;margin-top:2px">Showroom privativo · Joias autorais em ouro 18k</div>'
+    +(at.endereco?'<div style="font-size:8pt;color:#555;margin-top:2px">'+at.endereco+(at.bairro?', '+at.bairro:'')+(at.cidade?' · '+at.cidade+'/'+at.uf:'')+'</div>':'');
+  var hR=document.createElement('div');
+  hR.style.cssText='text-align:right;min-width:110px';
+  hR.innerHTML='<div style="font-size:8pt;color:#888;letter-spacing:.06em;text-transform:uppercase">Demanda Atendida</div>'
+    +'<div style="font-family:\'Cormorant Garamond\',serif;font-size:20pt;font-weight:700;color:#0D1F2D;line-height:1">OS #'+et.os_id+'</div>'
+    +'<div style="font-size:8pt;color:#666">'+fmtDate(et.data_fim||today())+'</div>';
+  hdr.appendChild(hL);hdr.appendChild(hR);wrap.appendChild(hdr);
+
+  // Faixa título verde
+  var faixa=document.createElement('div');
+  faixa.style.cssText='background:#2A5C3F;color:#fff;padding:7px 14px;border-radius:4px;font-size:10pt;font-weight:600;letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center';
+  faixa.innerHTML='<span>✦ Protocolo de Demanda Atendida</span>'
+    +'<span style="font-size:9pt;letter-spacing:.04em">'+(SETOR_LABEL[et.setor]||et.setor)+'</span>';
+  wrap.appendChild(faixa);
+
+  // Grid info
+  function infoBox2(lbl,val,full){
+    var d=document.createElement('div');
+    d.style.cssText='background:#f7f5f0;border-radius:4px;padding:7px 10px;'+(full?'grid-column:1/-1':'');
+    d.innerHTML='<div style="font-size:7.5pt;color:#888;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">'+lbl+'</div>'
+      +'<div style="font-size:10.5pt;font-weight:600;color:#1a1a2e">'+(val||'—')+'</div>';
+    return d;
+  }
+  var grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px';
+  grid.appendChild(infoBox2('Executado por', et.responsavel?'👤 '+et.responsavel:'—'));
+  grid.appendChild(infoBox2('Cliente / Origem', os.origem==='atelier'?'🏛 '+(col?col.nome:'Coleção Atelier'):(cl?cl.nome:'—')));
+  grid.appendChild(infoBox2('Início', et.data_ini?fmtDate(et.data_ini):'—'));
+  grid.appendChild(infoBox2('Conclusão', fmtDate(et.data_fim||today())));
+  wrap.appendChild(grid);
+
+  // O que foi realizado
+  var secRealizou=document.createElement('div');
+  secRealizou.style.cssText='margin-bottom:12px';
+  var titR=document.createElement('div');
+  titR.style.cssText='font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#0D1F2D;border-bottom:1px solid #ddd;padding-bottom:3px;margin-bottom:7px';
+  titR.textContent='O que foi realizado';
+  var bodyR=document.createElement('div');
+  bodyR.style.cssText='font-size:11pt;line-height:1.5;padding:9px 12px;border-left:3px solid #2A5C3F;background:#f0f9f4;border-radius:0 4px 4px 0';
+  bodyR.textContent=et.descricao||'—';
+  secRealizou.appendChild(titR);secRealizou.appendChild(bodyR);wrap.appendChild(secRealizou);
+
+  // Acabamento executado (se houver)
+  if(et.inclui_acabamento&&et.obs_acabamento){
+    var secAcab2=document.createElement('div');
+    secAcab2.style.cssText='margin-bottom:12px;background:#f0f9f4;border:1px solid #2A5C3F;border-radius:5px;padding:8px 12px';
+    secAcab2.innerHTML='<div style="font-size:8pt;font-weight:700;color:#2A5C3F;margin-bottom:3px;text-transform:uppercase;letter-spacing:.06em">✓ Acabamento Realizado</div>'
+      +'<div style="font-size:10.5pt;color:#1a3a25">'+et.obs_acabamento+'</div>';
+    wrap.appendChild(secAcab2);
+  }
+
+  // Próxima etapa
+  var secProx=document.createElement('div');
+  secProx.style.cssText='margin-bottom:14px;border:1.5px solid '+(proximaEtapa?'#0D1F2D':'#ccc')+';border-radius:5px;padding:10px 14px';
+  if(proximaEtapa){
+    secProx.innerHTML='<div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#0D1F2D;margin-bottom:5px">Próxima Etapa</div>'
+      +'<div style="font-size:10.5pt;font-weight:600">'+( SETOR_LABEL[proximaEtapa.setor]||proximaEtapa.setor)+'</div>'
+      +'<div style="font-size:10pt;color:#444;margin-top:3px">'+proximaEtapa.descricao+'</div>'
+      +(proximaEtapa.responsavel?'<div style="font-size:9pt;color:#777;margin-top:4px">👤 Responsável: <strong>'+proximaEtapa.responsavel+'</strong></div>':'');
+  } else {
+    secProx.innerHTML='<div style="font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#2A5C3F;margin-bottom:5px">✦ Todas as etapas concluídas</div>'
+      +'<div style="font-size:10pt;color:#444">Esta foi a última etapa registrada para esta OS. Encaminhar para Controle de Qualidade.</div>';
+  }
+  wrap.appendChild(secProx);
+
+  // Assinaturas
+  var sigs=document.createElement('div');
+  sigs.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:auto;padding-top:10px;border-top:1px solid #ddd';
+  function sig2(lbl){
+    var d=document.createElement('div');d.style.textAlign='center';
+    var ln=document.createElement('div');ln.style.cssText='border-top:1.5px solid #0D1F2D;margin-bottom:5px;margin-top:30px';
+    var lb=document.createElement('div');lb.style.cssText='font-size:8.5pt;color:#555';lb.textContent=lbl;
+    d.appendChild(ln);d.appendChild(lb);return d;
+  }
+  sigs.appendChild(sig2((et.responsavel||'Executor')+ ' · Entregou'));
+  sigs.appendChild(sig2(proximaEtapa?(proximaEtapa.responsavel||'Próximo responsável')+' · Recebeu':'Gerência · Recebeu para QC'));
+  wrap.appendChild(sigs);
+
+  // Rodapé
+  var rod=document.createElement('div');
+  rod.style.cssText='margin-top:10px;text-align:center;font-size:7pt;color:#bbb;border-top:1px solid #eee;padding-top:6px';
+  rod.textContent=(at.nome_fantasia||'Atelier Ana Lobão')+' · Demanda Atendida · OS #'+et.os_id+' · '+fmtDate(et.data_fim||today());
+  wrap.appendChild(rod);
+
+  // Botões
+  var btnBar=document.createElement('div');
+  btnBar.style.cssText='position:sticky;bottom:0;background:rgba(0,0,0,.85);padding:12px 20px;display:flex;gap:10px;justify-content:center;margin-top:16px;border-radius:8px';
+  var btnP=document.createElement('button');btnP.className='btn btn-primary';btnP.style.fontSize='15px';
+  btnP.textContent='🖨 Imprimir / Salvar PDF';
+  btnP.onclick=function(){
+    var s=document.createElement('style');s.id='prc';
+    s.textContent='@media print{body>*{display:none!important}#recibo-conclusao-print{display:block!important;position:static!important;box-shadow:none!important;width:148mm!important;min-height:210mm!important;margin:0!important;padding:13mm 12mm!important}}';
+    document.head.appendChild(s);window.print();
+    setTimeout(function(){var x=document.getElementById('prc');if(x)x.remove();},1000);
+  };
+  var btnF=document.createElement('button');btnF.className='btn btn-outline';
+  btnF.style.cssText='color:#fff;border-color:#fff';btnF.textContent='× Fechar';
+  btnF.onclick=function(){ov.remove();};
+  btnBar.appendChild(btnP);btnBar.appendChild(btnF);
+  ov.appendChild(wrap);ov.appendChild(btnBar);
+  ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  document.body.appendChild(ov);
 }
 
 
@@ -5784,6 +6143,8 @@ function exportarBackupJSON(){
     showToast('✅ Backup exportado com sucesso!');
   }catch(e){showToast('Erro ao exportar','danger');}
 }
+// Alias — chamado pelo banner de storage e por exportarBackupComMarca()
+var exportarBackup = exportarBackupJSON;
 function importarBackupJSON(){
   var inp=document.createElement('input');
   inp.type='file';inp.accept='.json,application/json';
