@@ -258,8 +258,7 @@ tbody td{padding:10px 14px;font-size:13px;color:var(--texto)}
   .kpi-grid{grid-template-columns:1fr}
 }
 </style>
-  <!-- Supabase JS Client -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" async defer onerror="window._sbLoadFailed=true"></script>
+  <!-- Supabase: usa fetch puro, sem biblioteca JS externa -->
 </head>
 <body>
 
@@ -455,7 +454,7 @@ function saveDB(){
     _alertaStorageCheioCritico();
   }
   // Sincroniza com Supabase se configurado
-  if(_sb) syncToSupabase();
+  if(_sbConfig()) syncToSupabase();
 }
 
 // Chamada emergencial quando localStorage lança exceção (storage cheio)
@@ -827,81 +826,95 @@ async function verifyPass(input, stored, userLogin){
 
 // ═══════════════════════════════════════════════════════════════════
 // SUPABASE — Sincronização em Nuvem
-// Todos os dispositivos compartilham os mesmos dados em tempo real
+// Usa fetch puro (sem biblioteca Supabase JS) para compatibilidade com Safari/iOS
 // ═══════════════════════════════════════════════════════════════════
-let _sb = null;           // cliente Supabase
-let _sbSyncing = false;   // flag anti-loop
-let _sbLastSync = null;   // timestamp da última sync
-let _sbPollTimer = null;  // timer de polling
+let _sbSyncing = false;
+let _sbLastSync = null;
+let _sbPollTimer = null;
 
 function _sbConfig(){
   try{return JSON.parse(localStorage.getItem('atelier_sb_config')||'null');}catch(e){return null;}
 }
 
-function _sbInit(){
+// Headers para REST API do Supabase
+function _sbHeaders(){
   const cfg=_sbConfig();
-  if(!cfg||!cfg.url||!cfg.key)return false;
-  // Verifica se a biblioteca Supabase foi carregada (async defer pode atrasar)
-  if(typeof supabase==='undefined'||typeof supabase.createClient!=='function'){
-    console.warn('[Supabase] biblioteca não carregada ainda');
-    return false;
-  }
-  try{
-    _sb=supabase.createClient(cfg.url,cfg.key,{
-      auth:{persistSession:false},
-      global:{headers:{'x-client-info':'atelier-ana-lobao'}}
-    });
-    return true;
-  }catch(e){console.warn('[Supabase] init error:',e);return false;}
+  if(!cfg)return null;
+  return {
+    'Content-Type':'application/json',
+    'apikey': cfg.key,
+    'Authorization': 'Bearer '+cfg.key,
+    'Prefer': 'return=minimal'
+  };
 }
 
-// Salva DB + USERS no Supabase
+// URL base da API REST do Supabase
+function _sbUrl(table){
+  const cfg=_sbConfig();
+  if(!cfg)return null;
+  return cfg.url+'/rest/v1/'+table;
+}
+
+// Sobe dados locais para o Supabase via fetch puro
 async function syncToSupabase(){
-  if(_sbSyncing||!_sb)return;
+  if(_sbSyncing)return;
+  const cfg=_sbConfig();
+  if(!cfg)return;
   _sbSyncing=true;
   try{
-    // Monta snapshot completo (igual ao localStorage)
     const snap={_ids:JSON.parse(JSON.stringify(DB._ids))};
     DB_KEYS.forEach(k=>{if(DB[k]!==undefined)snap[k]=DB[k];});
     DB_OBJ_KEYS.forEach(k=>{if(DB[k]!==undefined)snap[k]=DB[k];});
 
-    const {error:e1}=await _sb.from('atelier_sync')
-      .upsert({key:'database',payload:snap,updated_at:new Date().toISOString()});
-    if(e1)throw e1;
+    const url=_sbUrl('atelier_sync');
+    const headers=_sbHeaders();
 
-    const {error:e2}=await _sb.from('atelier_sync')
-      .upsert({key:'users',payload:USERS,updated_at:new Date().toISOString()});
-    if(e2)throw e2;
+    // Upsert database
+    const r1=await fetch(url+'?on_conflict=key',{
+      method:'POST',
+      headers:{...headers,'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify({key:'database',payload:snap,updated_at:new Date().toISOString()})
+    });
+    if(!r1.ok){const t=await r1.text();throw new Error('DB upsert: '+r1.status+' '+t);}
+
+    // Upsert users
+    const r2=await fetch(url+'?on_conflict=key',{
+      method:'POST',
+      headers:{...headers,'Prefer':'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify({key:'users',payload:USERS,updated_at:new Date().toISOString()})
+    });
+    if(!r2.ok){const t=await r2.text();throw new Error('Users upsert: '+r2.status+' '+t);}
 
     _sbLastSync=new Date();
     _sbUpdateIndicator('ok');
+    console.log('[Supabase] sync OK');
   }catch(err){
-    console.warn('[Supabase] sync error:',err);
+    console.warn('[Supabase] syncTo error:',err.message||err);
     _sbUpdateIndicator('error');
   }finally{_sbSyncing=false;}
 }
 
-// Carrega dados do Supabase e atualiza DB local
+// Baixa dados do Supabase via fetch puro
 async function syncFromSupabase(silent){
-  if(!_sb)return false;
+  const cfg=_sbConfig();
+  if(!cfg)return false;
   try{
-    const {data,error}=await _sb.from('atelier_sync')
-      .select('key,payload,updated_at')
-      .in('key',['database','users']);
-    if(error)throw error;
+    const url=_sbUrl('atelier_sync')+'?key=in.(database,users)&select=key,payload,updated_at';
+    const r=await fetch(url,{method:'GET',headers:_sbHeaders()});
+    if(!r.ok){const t=await r.text();throw new Error('GET: '+r.status+' '+t);}
+    const data=await r.json();
 
-    // Tabela vazia = projeto novo = conexão OK, apenas sem dados ainda
+    // Tabela vazia = projeto novo = conexão OK
     if(!data||!data.length){
       _sbLastSync=new Date();
       _sbUpdateIndicator('ok');
-      return true; // conexão funcionou, tabela só está vazia
+      return true;
     }
 
     let dbUpdated=false;
     data.forEach(row=>{
       if(row.key==='database'&&row.payload){
         const snap=row.payload;
-        // Verifica se Supabase tem dados mais recentes
         DB_KEYS.forEach(k=>{if(Array.isArray(snap[k]))DB[k]=snap[k];});
         DB_OBJ_KEYS.forEach(k=>{
           if(snap[k]&&typeof snap[k]==='object'&&!Array.isArray(snap[k])){
@@ -913,7 +926,6 @@ async function syncFromSupabase(silent){
           }
         });
         if(snap._ids)Object.keys(snap._ids).forEach(k=>{DB._ids[k]=snap._ids[k];});
-        // Salva no localStorage local
         localStorage.setItem('atelier_db_v2',JSON.stringify(snap));
         dbUpdated=true;
       }
@@ -922,71 +934,62 @@ async function syncFromSupabase(silent){
         row.payload.forEach(u=>USERS.push(u));
         migrateUsers();
         const _usersStr=JSON.stringify(USERS);
-  const _usersSig=btoa(_usersStr.length+'|'+_usersStr.charCodeAt(0)+'|'+_usersStr.charCodeAt(_usersStr.length-1)).slice(0,16);
-  localStorage.setItem('atelier_users',_usersStr);
-  localStorage.setItem('atelier_users_sig',_usersSig);
+        const _usersSig=btoa(_usersStr.length+'|'+_usersStr.charCodeAt(0)+'|'+_usersStr.charCodeAt(_usersStr.length-1)).slice(0,16);
+        localStorage.setItem('atelier_users',_usersStr);
+        localStorage.setItem('atelier_users_sig',_usersSig);
       }
     });
 
     _sbLastSync=new Date();
     _sbUpdateIndicator('ok');
     if(dbUpdated&&!silent){
-      // Recarrega o módulo atual silenciosamente
       if(CUR_MOD&&typeof renderModule==='function')renderModule(CUR_MOD);
     }
     return true;
   }catch(err){
-    console.warn('[Supabase] load error:',err.message||err);
+    console.warn('[Supabase] syncFrom error:',err.message||err);
     _sbUpdateIndicator('error');
     return false;
   }
 }
 
-// Indicador visual de sincronização na topbar
+// Indicador visual
 function _sbUpdateIndicator(status){
   const el=document.getElementById('sb-sync-status');
   if(!el)return;
-  const icons={ok:'☁️',error:'⚠️',syncing:'↻',off:'○'};
-  const colors={ok:'var(--verde)',error:'#eb5757',syncing:'var(--ouro)',off:'var(--texto-suave)'};
-  const labels={ok:'Sincronizado',error:'Sem conexão',syncing:'Sincronizando…',off:'Offline'};
-  el.innerHTML=`<span style="font-size:12px;color:${colors[status]}" title="${labels[status]} ${_sbLastSync?'às '+_sbLastSync.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):''}">
-    ${icons[status]} ${labels[status]}
-  </span>`;
+  const map={ok:'<span style="font-size:11px;color:var(--verde)">☁ Sincronizado '+( _sbLastSync?_sbLastSync.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'')+'</span>',
+    error:'<span style="font-size:11px;color:#eb5757">⚠ Erro de sync</span>',
+    syncing:'<span style="font-size:11px;color:var(--texto-suave)">↻ Sincronizando…</span>'};
+  el.innerHTML=map[status]||'';
 }
 
-// Polling: verifica atualizações de outros dispositivos a cada 30s
 function _sbStartPolling(){
   if(_sbPollTimer)clearInterval(_sbPollTimer);
-  _sbPollTimer=setInterval(async()=>{
-    if(!_sb||!SESS)return;
-    await syncFromSupabase(true);
-    // Recarrega nav para atualizar badges
-    buildNav();
+  _sbPollTimer=setInterval(function(){
+    if(_sbConfig())syncFromSupabase(true);
   },30000);
 }
 
-// Salvar configuração do Supabase
+// Salvar configuração
 function salvarConfigSupabase(){
   const url=document.getElementById('sb-url-input')?.value.trim();
   const key=document.getElementById('sb-key-input')?.value.trim();
   if(!url||!key){showToast('Preencha URL e chave','danger');return;}
   if(!url.startsWith('https://')){showToast('URL inválida — deve começar com https://','danger');return;}
   localStorage.setItem('atelier_sb_config',JSON.stringify({url,key}));
-  if(_sbInit()){
-    showToast('Conectando ao Supabase…','warn');
-    document.getElementById('sb-test-result').textContent='Testando…';
-    syncFromSupabase(false).then(ok=>{
-      if(ok){
-        showToast('✅ Supabase conectado! Sincronizando dados…');
-        document.getElementById('sb-test-result').innerHTML='<span style="color:var(--verde)">✅ Conectado e sincronizado!</span>';
-        syncToSupabase();
-        _sbStartPolling();
-        renderAcessos(document.getElementById('content'));
-      } else {
-        document.getElementById('sb-test-result').innerHTML='<span style="color:#eb5757">❌ Erro: verifique URL e chave. Execute o SQL no Supabase.</span>';
-      }
-    });
-  }
+  showToast('Conectando ao Supabase…','info');
+  document.getElementById('sb-test-result').textContent='Testando…';
+  syncFromSupabase(false).then(ok=>{
+    if(ok){
+      showToast('✅ Supabase conectado!','success');
+      document.getElementById('sb-test-result').innerHTML='<span style="color:var(--verde)">✅ Conectado!</span>';
+      syncToSupabase();
+      _sbStartPolling();
+      renderAcessos(document.getElementById('content'));
+    } else {
+      document.getElementById('sb-test-result').innerHTML='<span style="color:#eb5757">❌ Erro — verifique URL e chave e execute o SQL no Supabase.</span>';
+    }
+  });
 }
 
 function testarConexaoSupabase(){
@@ -995,14 +998,13 @@ function testarConexaoSupabase(){
   if(!url||!key){showToast('Preencha URL e chave primeiro','danger');return;}
   localStorage.setItem('atelier_sb_config',JSON.stringify({url,key}));
   const testBtn=document.getElementById('sb-test-btn');
-  if(testBtn){testBtn.disabled=true;testBtn.textContent='Testando…';}
   const res=document.getElementById('sb-test-result');
+  if(testBtn){testBtn.disabled=true;testBtn.textContent='Testando…';}
   if(res)res.textContent='Aguarde…';
-  _sbInit();
   syncFromSupabase(false).then(ok=>{
     if(testBtn){testBtn.disabled=false;testBtn.textContent='Testar Conexão';}
     if(ok){
-      if(res)res.innerHTML='<span style="color:var(--verde)">✅ Conexão bem-sucedida! Dados carregados.</span>';
+      if(res)res.innerHTML='<span style="color:var(--verde)">✅ Conexão bem-sucedida!</span>';
       _sbStartPolling();
     } else {
       if(res)res.innerHTML='<span style="color:#eb5757">❌ Falha. Verifique URL/chave e se o SQL foi executado.</span>';
@@ -1012,16 +1014,16 @@ function testarConexaoSupabase(){
 
 function desconectarSupabase(){
   confirmarAcao('Desconectar do Supabase?',
-    'Os dados locais serão mantidos. Você pode reconectar a qualquer momento.',
+    'Os dados locais serão mantidos.',
     'Desconectar',function(){
       localStorage.removeItem('atelier_sb_config');
-      _sb=null;
       if(_sbPollTimer)clearInterval(_sbPollTimer);
-      _sbUpdateIndicator('off');
+      _sbPollTimer=null;
       showToast('Desconectado do Supabase');
       renderAcessos(document.getElementById('content'));
     });
 }
+
 
 // SQL para copiar e executar no Supabase
 const SUPABASE_SQL=`-- Execute este SQL no Supabase SQL Editor
