@@ -881,7 +881,13 @@ async function syncFromSupabase(silent){
       .select('key,payload,updated_at')
       .in('key',['database','users']);
     if(error)throw error;
-    if(!data||!data.length)return false;
+
+    // Tabela vazia = projeto novo = conexão OK, apenas sem dados ainda
+    if(!data||!data.length){
+      _sbLastSync=new Date();
+      _sbUpdateIndicator('ok');
+      return true; // conexão funcionou, tabela só está vazia
+    }
 
     let dbUpdated=false;
     data.forEach(row=>{
