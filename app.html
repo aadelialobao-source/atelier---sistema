@@ -869,8 +869,8 @@ async function syncToSupabase(){
     const url=_sbUrl('atelier_sync');
     const headers=_sbHeaders();
 
-    // Upsert database
-    const r1=await fetch(url+'?on_conflict=key',{
+    // Upsert database — sintaxe correta PostgREST
+    const r1=await fetch(url,{
       method:'POST',
       headers:{...headers,'Prefer':'resolution=merge-duplicates,return=minimal'},
       body:JSON.stringify({key:'database',payload:snap,updated_at:new Date().toISOString()})
@@ -878,7 +878,7 @@ async function syncToSupabase(){
     if(!r1.ok){const t=await r1.text();throw new Error('DB upsert: '+r1.status+' '+t);}
 
     // Upsert users
-    const r2=await fetch(url+'?on_conflict=key',{
+    const r2=await fetch(url,{
       method:'POST',
       headers:{...headers,'Prefer':'resolution=merge-duplicates,return=minimal'},
       body:JSON.stringify({key:'users',payload:USERS,updated_at:new Date().toISOString()})
