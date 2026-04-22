@@ -6552,6 +6552,46 @@ function renderAcessos(c){
         </tbody></table>
       </div>
     </div>
+  </div>
+
+  <!-- SUPABASE — Sincronização em Nuvem -->
+  <div class="card" style="margin-top:24px">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <span class="card-title">☁ Sincronização em Nuvem · Supabase</span>
+        <p style="font-size:12px;color:var(--texto-suave);margin-top:3px">Conecte ao Supabase para sincronizar dados entre todos os dispositivos em tempo real.</p>
+      </div>
+      <div id="sb-sync-status"></div>
+    </div>
+    <div class="card-body">
+      ${_sbConfig()?`
+      <div class="alert alert-success" style="margin-bottom:16px">
+        ✅ Supabase conectado — dados sincronizados automaticamente.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-outline" onclick="desconectarSupabase()">Desconectar</button>
+        <button class="btn btn-outline" onclick="syncFromSupabase(false).then(ok=>showToast(ok?'Dados atualizados':'Falha na sincronização',ok?'success':'danger'))">↻ Sincronizar agora</button>
+      </div>`:`
+      <div class="alert alert-info" style="margin-bottom:16px;font-size:12px">
+        💡 Cole a <strong>Project URL</strong> e a <strong>Publishable Key</strong> do seu projeto Supabase abaixo.
+        A tabela já foi criada via SQL Editor. Após conectar, todos os dispositivos compartilham os mesmos dados.
+      </div>
+      <div class="form-grid" style="gap:14px;margin-bottom:14px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Project URL</label>
+          <input id="sb-url-input" type="url" placeholder="https://xxxx.supabase.co" style="font-size:13px">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Publishable Key (anon)</label>
+          <input id="sb-key-input" type="text" placeholder="sb_publishable_..." style="font-size:13px">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button id="sb-test-btn" class="btn btn-primary" onclick="salvarConfigSupabase()">☁ Conectar ao Supabase</button>
+        <button class="btn btn-outline" onclick="testarConexaoSupabase()">Testar Conexão</button>
+      </div>
+      <div id="sb-test-result" style="margin-top:10px;font-size:13px"></div>`}
+    </div>
   </div>`;
 }
 function openUserModal(idx){
