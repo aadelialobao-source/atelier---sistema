@@ -841,8 +841,16 @@ function _sbConfig(){
 function _sbInit(){
   const cfg=_sbConfig();
   if(!cfg||!cfg.url||!cfg.key)return false;
+  // Verifica se a biblioteca Supabase foi carregada (async defer pode atrasar)
+  if(typeof supabase==='undefined'||typeof supabase.createClient!=='function'){
+    console.warn('[Supabase] biblioteca não carregada ainda');
+    return false;
+  }
   try{
-    _sb=supabase.createClient(cfg.url,cfg.key);
+    _sb=supabase.createClient(cfg.url,cfg.key,{
+      auth:{persistSession:false},
+      global:{headers:{'x-client-info':'atelier-ana-lobao'}}
+    });
     return true;
   }catch(e){console.warn('[Supabase] init error:',e);return false;}
 }
@@ -928,7 +936,7 @@ async function syncFromSupabase(silent){
     }
     return true;
   }catch(err){
-    console.warn('[Supabase] load error:',err);
+    console.warn('[Supabase] load error:',err.message||err);
     _sbUpdateIndicator('error');
     return false;
   }
@@ -6576,7 +6584,7 @@ function renderAcessos(c){
       </div>
       <div style="display:flex;gap:10px">
         <button class="btn btn-outline" onclick="desconectarSupabase()">Desconectar</button>
-        <button class="btn btn-outline" onclick="syncFromSupabase(false).then(ok=>showToast(ok?'Dados atualizados':'Falha na sincronização',ok?'success':'danger'))">↻ Sincronizar agora</button>
+        <button class="btn btn-outline" onclick="(async()=>{showToast('Sincronizando…','info');await syncToSupabase();const ok=await syncFromSupabase(false);showToast(ok?'✅ Dados sincronizados!':'Falha na sincronização',ok?'success':'danger');})()">↻ Sincronizar agora</button>
       </div>`:`
       <div class="alert alert-info" style="margin-bottom:16px;font-size:12px">
         💡 Cole a <strong>Project URL</strong> e a <strong>Publishable Key</strong> do seu projeto Supabase abaixo.
