@@ -926,7 +926,10 @@ async function syncFromSupabase(silent){
           }
         });
         if(snap._ids)Object.keys(snap._ids).forEach(k=>{DB._ids[k]=snap._ids[k];});
-        localStorage.setItem('atelier_db_v2',JSON.stringify(snap));
+        const snapStr=JSON.stringify(snap);
+        localStorage.setItem('atelier_db_v2',snapStr);
+        // Atualiza hash de integridade para evitar falso alarme
+        _dbHash(snapStr).then(h=>localStorage.setItem('atelier_db_integrity',h)).catch(()=>{});
         dbUpdated=true;
       }
       if(row.key==='users'&&Array.isArray(row.payload)){
