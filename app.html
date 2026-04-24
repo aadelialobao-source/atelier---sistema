@@ -5768,7 +5768,7 @@ function gerarReciboOuro(entradaId){
   acoes.className='acoes';
   acoes.innerHTML='<span style="font-family:Georgia,serif;font-size:12px;letter-spacing:1px;color:#0D1F2D">'+num+'</span>'
     +'<div style="display:flex;gap:8px">'
-    +'<button class="btn-imp" onclick="window.print()">🖨 Imprimir</button>'
+    +'<button class="btn-imp" onclick="imprimirReciboOuro()">🖨 Imprimir</button>'
     +'<button class="btn-pdf" onclick="gerarPDFReciboOuro()">⬇ PDF</button>'
     +'<button class="btn-fec" onclick="document.getElementById('recibo-ouro-overlay').remove();document.getElementById('recibo-ouro-style').remove()">✕</button>'
     +'</div>';
@@ -5784,6 +5784,24 @@ function gerarReciboOuro(entradaId){
 
   // Guarda conteúdo para geração de PDF
   window._reciboOuroHTML='<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>'+num+'</title><style>'+estiloCSS+'.acoes{display:none}</style></head><body><div class="page">'+corpoHTML+'</div></body></html>';
+}
+
+
+function imprimirReciboOuro(){
+  var html=window._reciboOuroHTML||'';
+  if(!html){showToast('Abra o recibo primeiro','warn');return;}
+  var htmlComPrint=html.replace('</body>','<script>window.onload=function(){window.print();}<\/script></body>');
+  var w=window.open('','_blank','width=600,height=800');
+  if(w){w.document.write(htmlComPrint);w.document.close();}
+  else{
+    // Safari: cria iframe temporário para impressão
+    var iframe=document.createElement('iframe');
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px';
+    document.body.appendChild(iframe);
+    iframe.contentDocument.write(html);
+    iframe.contentDocument.close();
+    setTimeout(function(){iframe.contentWindow.print();document.body.removeChild(iframe);},300);
+  }
 }
 
 function gerarPDFReciboOuro(){
