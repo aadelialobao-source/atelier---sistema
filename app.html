@@ -2523,7 +2523,10 @@ function verCliente(id){
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div><p style="font-size:11px;color:rgba(176,142,86,.7);letter-spacing:.1em;text-transform:uppercase">Entrada ${fmtDate(e.data)}</p>
             <p class="reserva-saldo">${fmt(e.credito)}</p></div>
-            <span class="badge badge-gold">${e.qtd_pecas} peças · ${fmtN(e.peso_liquido,2)}g</span>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+              <span class="badge badge-gold">${e.qtd_pecas} peças · ${fmtN(e.peso_liquido,2)}g</span>
+              <button onclick="gerarReciboOuro(${e.id})" style="background:rgba(176,142,86,.2);color:#B08E56;border:1px solid rgba(176,142,86,.4);border-radius:4px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:Jost,sans-serif">🖨 Recibo</button>
+            </div>
           </div>
           <p style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:8px">Cotação travada: ${fmt(e.cotacao_18k_liq)}/g · Bônus: +${e.bonus}%</p>
         </div>`).join('')||`<div class="empty-state"><div class="empty-state-icon">◆</div><p>Sem entradas de ouro</p></div>`}
@@ -5843,21 +5846,22 @@ function verCarteira(cid){
 // ═══════════════════════════════════════════════════════════════════
 function renderHistoricoReserva(c){
   const tudo=[
-    ...DB.entradas_ouro.map(e=>({data:e.data,tipo:'entrada',cliente:clienteNome(e.cliente_id),valor:e.credito,desc:`${e.qtd_pecas} peças, ${fmtN(e.peso_liquido,2)}g · cot. ${fmt(e.cotacao_18k_liq)}/g · bônus +${e.bonus}%`})),
-    ...DB.vendas_credito.map(v=>({data:v.data,tipo:'uso',cliente:clienteNome(v.cliente_id),valor:v.valor_usado,desc:v.descricao}))
+    ...DB.entradas_ouro.map(e=>({data:e.data,tipo:'entrada',cliente:clienteNome(e.cliente_id),valor:e.credito,desc:`${e.qtd_pecas} peças, ${fmtN(e.peso_liquido,2)}g · cot. ${fmt(e.cotacao_18k_liq)}/g · bônus +${e.bonus}%`,id:e.id})),
+    ...DB.vendas_credito.map(v=>({data:v.data,tipo:'uso',cliente:clienteNome(v.cliente_id),valor:v.valor_usado,desc:v.descricao,id:null}))
   ].sort((a,b)=>b.data.localeCompare(a.data));
   c.innerHTML=`
   <div class="page-header">
     <div><p class="page-title">Histórico Reserva</p><p class="page-sub">${tudo.length} movimentações</p></div>
   </div>
-  <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th>Valor</th><th>Detalhes</th></tr></thead>
+  <div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th>Valor</th><th>Detalhes</th><th>Ações</th></tr></thead>
   <tbody>${tudo.map(m=>`<tr>
     <td>${fmtDate(m.data)}</td>
     <td><span class="badge ${m.tipo==='entrada'?'badge-green':'badge-yellow'}">${m.tipo==='entrada'?'Entrada':'Uso'}</span></td>
     <td>${m.cliente}</td>
     <td class="${m.tipo==='entrada'?'extrato-credit':'extrato-debit'} fw-600">${m.tipo==='entrada'?'+':'−'}${fmt(m.valor)}</td>
     <td style="font-size:12px;color:var(--texto-suave)">${m.desc}</td>
-  </tr>`).join('')||'<tr><td colspan="5" class="text-center text-suave" style="padding:32px">Nenhuma movimentação</td></tr>'}
+    <td>${m.tipo==='entrada'&&m.id?`<button class="btn btn-xs btn-gold" onclick="gerarReciboOuro(${m.id})">🖨 Recibo</button>`:''}</td>
+  </tr>`).join('')||'<tr><td colspan="6" class="text-center text-suave" style="padding:32px">Nenhuma movimentação</td></tr>'}
   </tbody></table></div>`;
 }
 
