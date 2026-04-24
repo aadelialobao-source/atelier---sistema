@@ -6069,7 +6069,7 @@ function openVendaModal(){
         <p style="font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--texto-suave);margin-bottom:10px">Forma de Pagamento</p>
         <input type="hidden" id="vd-forma" value="PIX">
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-          ${['PIX','Cartão','Dinheiro','Reserva','Misto'].map(f=>`
+          ${['PIX','Débito','Cartão','Parcelado','Dinheiro','Reserva','Misto'].map(f=>`
             <button id="vd-btn-${f.toLowerCase()}" onclick="selecionarFormaPgto('${f}')"
               style="padding:8px 14px;border:1.5px solid var(--borda);border-radius:6px;background:var(--fundo-input);font-family:Jost,sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--texto)">${f}</button>
           `).join('')}
@@ -6097,17 +6097,21 @@ function calcVenda(){
 
   if(forma==='Misto'){
     var pix=parseFloat(document.getElementById('mx-pix')?.value)||0;
+    var deb=parseFloat(document.getElementById('mx-debito')?.value)||0;
     var cartao=parseFloat(document.getElementById('mx-cartao')?.value)||0;
+    var parc=parseFloat(document.getElementById('mx-parcelado')?.value)||0;
     var din=parseFloat(document.getElementById('mx-dinheiro')?.value)||0;
     var res=parseFloat(document.getElementById('mx-reserva')?.value)||0;
     var out=parseFloat(document.getElementById('mx-outro')?.value)||0;
-    var soma=pix+cartao+din+res+out;
+    var soma=pix+deb+cartao+parc+din+res+out;
     var resto=total-soma;
     var cor=Math.abs(resto)<0.01?'var(--verde)':'#eb5757';
     var msg=Math.abs(resto)<0.01?'✅ Completo':(resto>0?'⚠ Faltam '+fmt(resto):'⚠ Excede '+fmt(Math.abs(resto)));
     var partes=[];
     if(pix>0)partes.push('PIX: '+fmt(pix));
+    if(deb>0)partes.push('Débito: '+fmt(deb));
     if(cartao>0)partes.push('Cartão: '+fmt(cartao));
+    if(parc>0){var nparc=document.getElementById('mx-parcelas')?.value||'2';partes.push('Parcelado '+nparc+'×: '+fmt(parc));}
     if(din>0)partes.push('Dinheiro: '+fmt(din));
     if(res>0)partes.push('Reserva: '+fmt(res));
     if(out>0)partes.push((document.getElementById('mx-outro-desc')?.value||'Outro')+': '+fmt(out));
@@ -6115,6 +6119,14 @@ function calcVenda(){
       +'<span style="color:'+cor+';font-weight:600">'+msg+'</span>'
       +'<span style="font-size:18px;font-weight:700;color:var(--ouro)">'+fmt(total)+'</span></div>'
       +'<div style="font-size:12px;color:var(--texto-suave);margin-top:4px">'+partes.join(' · ')+'</div>';
+  } else if(forma==='Parcelado'){
+    var nparcelas=parseInt(document.getElementById('vd-parcelas')?.value)||2;
+    var vlParcela=total/nparcelas;
+    var elp=document.getElementById('vd-parcela-val');
+    if(elp)elp.value=fmt(vlParcela);
+    el.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center">'
+      +'<span style="font-size:14px">'+nparcelas+'× de <strong>'+fmt(vlParcela)+'</strong> (sem juros)</span>'
+      +'<span style="font-size:18px;font-weight:700;color:var(--ouro)">'+fmt(total)+'</span></div>';
   } else if(forma==='Reserva'){
     var reserva=parseFloat(document.getElementById('vd-reserva')?.value)||0;
     var caixa=Math.max(0,total-reserva);
@@ -6141,16 +6153,23 @@ function saveVenda(){
 
   if(forma==='Misto'){
     var pix=parseFloat(document.getElementById('mx-pix')?.value)||0;
+    var deb=parseFloat(document.getElementById('mx-debito')?.value)||0;
     var cartao=parseFloat(document.getElementById('mx-cartao')?.value)||0;
+    var parc=parseFloat(document.getElementById('mx-parcelado')?.value)||0;
+    var nparc=parseInt(document.getElementById('mx-parcelas')?.value)||2;
     var din=parseFloat(document.getElementById('mx-dinheiro')?.value)||0;
     var res=parseFloat(document.getElementById('mx-reserva')?.value)||0;
     var out=parseFloat(document.getElementById('mx-outro')?.value)||0;
     var outDesc=document.getElementById('mx-outro-desc')?.value||'';
-    var soma=pix+cartao+din+res+out;
+    var soma=pix+deb+cartao+parc+din+res+out;
     if(Math.abs(soma-total)>0.5){showToast('Valores do pagamento Misto não fecham com o total','danger');return;}
     reserva=res;
-    emCaixa=pix+cartao+din+out;
-    pgtoDetalhes={pix,cartao,dinheiro:din,reserva:res,outro:out,outro_desc:outDesc};
+    emCaixa=pix+deb+cartao+parc+din+out;
+    pgtoDetalhes={pix,debito:deb,cartao,parcelado:parc,parcelas:nparc,dinheiro:din,reserva:res,outro:out,outro_desc:outDesc};
+  } else if(forma==='Parcelado'){
+    var nparcelas=parseInt(document.getElementById('vd-parcelas')?.value)||2;
+    pgtoDetalhes={parcelas:nparcelas,valor_parcela:total/nparcelas};
+    emCaixa=total;
   } else if(forma==='Reserva'){
     reserva=parseFloat(document.getElementById('vd-reserva')?.value)||0;
     var saldo=calcSaldoCliente(cid||0);
@@ -7942,7 +7961,7 @@ function novaVendaCaixaModal(){
       +'<p style="font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--texto-suave);margin-bottom:10px">Forma de Pagamento</p>'
       +'<input type="hidden" id="cxv-forma" value="PIX">'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
-        +['PIX','Dinheiro','Cartão','Reserva','Misto'].map(function(f){
+        +['PIX','Débito','Dinheiro','Cartão','Parcelado','Reserva','Misto'].map(function(f){
           return '<button id="cxv-btn-'+f.toLowerCase()+'" onclick="selecionarFormaCaixa(\''+f+'\')" style="padding:8px 14px;border:1.5px solid var(--borda);border-radius:6px;background:var(--fundo-input);font-family:Jost,sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--texto)">'+f+'</button>';
         }).join('')
       +'</div>'
@@ -7971,9 +7990,12 @@ function selecionarProdutoCaixa(){
 function selecionarFormaCaixa(forma){
   var cid=parseInt(document.getElementById('cxv-cl')?.value)||0;
   var saldoReserva=calcSaldoCliente(cid);
+  var val=parseFloat(document.getElementById('cxv-val')?.value)||0;
+  var pct=(DB.params_reserva&&DB.params_reserva.limite_uso_pct)||40;
+  var limR=calcLimiteReserva(val,saldoReserva);
   if(forma==='Reserva'&&saldoReserva<=0){showToast('Cliente sem saldo de Reserva','danger');return;}
   document.getElementById('cxv-forma').value=forma;
-  ['pix','dinheiro','cartão','reserva','misto'].forEach(function(f){
+  ['pix','débito','dinheiro','cartão','parcelado','reserva','misto'].forEach(function(f){
     var btn=document.getElementById('cxv-btn-'+f);if(!btn)return;
     var sel=(f===forma.toLowerCase());
     btn.style.background=sel?'var(--ouro)':'var(--fundo-input)';
@@ -7982,23 +8004,47 @@ function selecionarFormaCaixa(forma){
   });
   atualizarBotoesReserva('cxv-btn-reserva',saldoReserva,'cxv-forma');
   var detalhe=document.getElementById('cxv-pgto-detalhe');if(!detalhe)return;
+
+  var inp=function(id,lbl,extra){
+    return '<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">'+lbl+'</label>'
+      +'<input id="'+id+'" type="number" step="10" value="0" min="0" oninput="calcCaixaVista()" '+(extra||'')
+      +' style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right"></div>';
+  };
+
   if(forma==='Misto'){
-    detalhe.innerHTML='<p style="font-size:12px;color:var(--texto-suave);margin-bottom:10px">Informe quanto foi pago em cada modalidade:</p>'
+    var limInfo=saldoReserva>0
+      ?' · Saldo: '+fmt(saldoReserva)+' · Máx '+pct+'%: '+fmt(limR)
+      :' · Sem saldo';
+    detalhe.innerHTML='<p style="font-size:12px;color:var(--texto-suave);margin-bottom:10px">Distribua o pagamento entre as modalidades:</p>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
-      +[['PIX','cxv-mx-pix'],['Cartão','cxv-mx-cartao'],['Dinheiro','cxv-mx-dinheiro']].map(function(it){
-        return '<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">'+it[0]+' (R$)</label>'
-          +'<input id="'+it[1]+'" type="number" step="10" value="0" min="0" oninput="calcCaixaVista()" style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right"></div>';
-      }).join('')
-      +'<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">Reserva (R$)'+(saldoReserva>0?' · Saldo: '+fmt(saldoReserva):'<span style="color:#eb5757"> · Sem saldo</span>')+'</label>'
-      +'<input id="cxv-mx-reserva" type="number" step="10" value="0" min="0" max="'+calcLimiteReserva(parseFloat(document.getElementById('cxv-val')?.value)||0,saldoReserva)+'" oninput="calcCaixaVista()"'+(saldoReserva<=0?' disabled':'')+' style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:'+(saldoReserva<=0?'#eee':'var(--fundo-input)')+';font-family:Jost,sans-serif;text-align:right'+(saldoReserva<=0?';opacity:.5':'')+'"></div>'
+      +inp('cxv-mx-pix','PIX (R$)')
+      +inp('cxv-mx-debito','Débito (R$)')
+      +inp('cxv-mx-cartao','Cartão à Vista (R$)')
+      +'<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">Parcelado (R$)</label>'
+        +'<input id="cxv-mx-parcelado" type="number" step="10" value="0" min="0" oninput="calcCaixaVista()" style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
+        +'<select id="cxv-mx-parcelas" style="width:100%;margin-top:4px;padding:5px 8px;font-size:12px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
+        +[2,3,4,5,6,7,8,9,10,12].map(function(n){return '<option value="'+n+'">'+n+'× sem juros</option>';}).join('')
+        +'</select></div>'
+      +inp('cxv-mx-dinheiro','Dinheiro (R$)')
+      +'<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">Reserva (R$)'+limInfo+'</label>'
+        +'<input id="cxv-mx-reserva" type="number" step="10" value="0" min="0" max="'+limR.toFixed(2)+'" oninput="calcCaixaVista()"'+(saldoReserva<=0?' disabled':'')
+        +' style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:'+(saldoReserva<=0?'#f5f5f5':'var(--fundo-input)')+';font-family:Jost,sans-serif;text-align:right'+(saldoReserva<=0?';opacity:.5':'')+'"></div>'
       +'<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">Outro (R$)</label>'
-      +'<div style="display:flex;gap:6px">'
-      +'<input id="cxv-mx-outro" type="number" step="10" value="0" min="0" oninput="calcCaixaVista()" style="width:80px;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
-      +'<input id="cxv-mx-outro-desc" placeholder="Ex: Cheque, TED…" style="flex:1;padding:8px 10px;font-size:13px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
-      +'</div></div></div>';
+        +'<div style="display:flex;gap:6px">'
+        +'<input id="cxv-mx-outro" type="number" step="10" value="0" min="0" oninput="calcCaixaVista()" style="width:80px;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
+        +'<input id="cxv-mx-outro-desc" placeholder="Cheque, TED…" style="flex:1;padding:8px 10px;font-size:13px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
+        +'</div></div></div>';
+  } else if(forma==='Parcelado'){
+    detalhe.innerHTML='<div style="display:flex;align-items:center;gap:12px">'
+      +'<select id="cxv-parcelas" style="padding:9px 12px;font-size:14px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
+      +[2,3,4,5,6,7,8,9,10,12].map(function(n){return '<option value="'+n+'">'+n+'× sem juros</option>';}).join('')
+      +'</select>'
+      +'<span id="cxv-parcela-val" style="font-size:15px;font-weight:700;color:var(--ouro)"></span></div>';
+    document.getElementById('cxv-parcelas')?.addEventListener('change',calcCaixaVista);
   } else if(forma==='Reserva'){
-    detalhe.innerHTML='<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">Crédito Reserva (R$)'+(saldoReserva>0?' · Saldo: '+fmt(saldoReserva):'')+'</label>'
-      +'<input id="cxv-reserva-val" type="number" step="10" value="'+saldoReserva+'" min="0" max="'+saldoReserva+'" oninput="calcCaixaVista()" style="width:100%;padding:9px 10px;font-size:16px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right"></div>';
+    detalhe.innerHTML='<div><label style="font-size:11px;color:var(--texto-suave);display:block;margin-bottom:3px">Crédito Reserva (R$)'+(saldoReserva>0?' · Saldo: '+fmt(saldoReserva)+' · Limite '+pct+'%: '+fmt(limR):'')+'</label>'
+      +'<input id="cxv-reserva-val" type="number" step="10" value="'+limR.toFixed(2)+'" min="0" max="'+limR.toFixed(2)+'" oninput="calcCaixaVista()" style="width:100%;padding:9px 10px;font-size:16px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
+      +'<p style="font-size:11px;color:var(--texto-suave);margin-top:4px">Limite: '+pct+'% do valor = '+fmt(limR)+'</p></div>';
   } else {detalhe.innerHTML='';}
   calcCaixaVista();
 }
@@ -8009,17 +8055,21 @@ function calcCaixaVista(){
   if(!val){el.innerHTML='Preencha o valor.';return;}
   if(forma==='Misto'){
     var pix=parseFloat(document.getElementById('cxv-mx-pix')?.value)||0;
+    var deb=parseFloat(document.getElementById('cxv-mx-debito')?.value)||0;
     var cartao=parseFloat(document.getElementById('cxv-mx-cartao')?.value)||0;
+    var parc=parseFloat(document.getElementById('cxv-mx-parcelado')?.value)||0;
     var din=parseFloat(document.getElementById('cxv-mx-dinheiro')?.value)||0;
     var res=parseFloat(document.getElementById('cxv-mx-reserva')?.value)||0;
     var out=parseFloat(document.getElementById('cxv-mx-outro')?.value)||0;
-    var soma=pix+cartao+din+res+out;
+    var soma=pix+deb+cartao+parc+din+res+out;
     var resto=val-soma;
     var cor=Math.abs(resto)<0.01?'var(--verde)':'#eb5757';
     var msg=Math.abs(resto)<0.01?'✅ Completo':(resto>0?'⚠️ Faltam '+fmt(resto):'⚠️ Excede '+fmt(Math.abs(resto)));
     var partes=[];
     if(pix>0)partes.push('PIX: '+fmt(pix));
+    if(deb>0)partes.push('Débito: '+fmt(deb));
     if(cartao>0)partes.push('Cartão: '+fmt(cartao));
+    if(parc>0){var np=document.getElementById('cxv-mx-parcelas')?.value||'2';partes.push('Parc. '+np+'×: '+fmt(parc));}
     if(din>0)partes.push('Dinheiro: '+fmt(din));
     if(res>0)partes.push('Reserva: '+fmt(res));
     if(out>0)partes.push((document.getElementById('cxv-mx-outro-desc')?.value||'Outro')+': '+fmt(out));
@@ -8027,6 +8077,12 @@ function calcCaixaVista(){
       +'<span style="color:'+cor+';font-weight:600">'+msg+'</span>'
       +'<span style="font-size:18px;font-weight:700;color:var(--ouro)">'+fmt(val)+'</span></div>'
       +'<div style="font-size:12px;color:var(--texto-suave);margin-top:4px">'+partes.join(' · ')+'</div>';
+  } else if(forma==='Parcelado'){
+    var nparcelas=parseInt(document.getElementById('cxv-parcelas')?.value)||2;
+    var vlp=val/nparcelas;
+    var elp=document.getElementById('cxv-parcela-val');
+    if(elp)elp.textContent=nparcelas+'× de '+fmt(vlp);
+    el.innerHTML='<div style="text-align:center"><span style="font-size:18px;font-weight:700;color:var(--ouro)">'+fmt(val)+'</span> <span style="font-size:14px">em '+nparcelas+'× de '+fmt(vlp)+'</span></div>';
   } else {
     el.innerHTML='<div style="text-align:center"><span style="font-size:20px;font-weight:700;color:var(--ouro)">'+fmt(val)+'</span> <span style="font-size:14px">via '+forma+'</span></div>';
   }
@@ -8044,12 +8100,15 @@ function salvarVendaCaixa(){
   var pgtoDetalhes=null,emCaixa=val,reserva=0;
   if(forma==='Misto'){
     var pix=parseFloat(document.getElementById('cxv-mx-pix')?.value)||0;
+    var deb=parseFloat(document.getElementById('cxv-mx-debito')?.value)||0;
     var cartao=parseFloat(document.getElementById('cxv-mx-cartao')?.value)||0;
+    var parc=parseFloat(document.getElementById('cxv-mx-parcelado')?.value)||0;
+    var nparc=parseInt(document.getElementById('cxv-mx-parcelas')?.value)||2;
     var din=parseFloat(document.getElementById('cxv-mx-dinheiro')?.value)||0;
     reserva=parseFloat(document.getElementById('cxv-mx-reserva')?.value)||0;
     var out=parseFloat(document.getElementById('cxv-mx-outro')?.value)||0;
     var outDesc=document.getElementById('cxv-mx-outro-desc')?.value||'Outro';
-    var soma=pix+cartao+din+reserva+out;
+    var soma=pix+deb+cartao+parc+din+reserva+out;
     if(Math.abs(soma-val)>0.5){showToast('Soma dos pagamentos difere do total','danger');return;}
     if(reserva>0){
       if(!cid){showToast('Selecione um cliente para usar Reserva','danger');return;}
@@ -8057,15 +8116,19 @@ function salvarVendaCaixa(){
       if(saldoDisp<=0){showToast('Cliente sem saldo de Reserva','danger');return;}
       var limRes=calcLimiteReserva(val,saldoDisp);
       if(reserva>limRes+0.5){
-        window._pendingCaixa={desc,val,forma,colab,cid,pid,pgtoDetalhes:{pix,cartao,dinheiro:din,reserva,outro:out,outro_desc:outDesc},emCaixa:pix+cartao+din+out,reserva};
+        window._pendingCaixa={desc,val,forma,colab,cid,pid,pgtoDetalhes:{pix,debito:deb,cartao,parcelado:parc,parcelas:nparc,dinheiro:din,reserva,outro:out,outro_desc:outDesc},emCaixa:pix+deb+cartao+parc+din+out,reserva};
         solicitarOverrideReserva(reserva,limRes,function(){salvarVendaCaixaFinalizar();});return;
       }
-      emCaixa=pix+cartao+din+out;
-      pgtoDetalhes={pix,cartao,dinheiro:din,reserva,outro:out,outro_desc:outDesc};
+      emCaixa=pix+deb+cartao+parc+din+out;
+      pgtoDetalhes={pix,debito:deb,cartao,parcelado:parc,parcelas:nparc,dinheiro:din,reserva,outro:out,outro_desc:outDesc};
     } else {
-      emCaixa=pix+cartao+din+out;
-      pgtoDetalhes={pix,cartao,dinheiro:din,reserva:0,outro:out,outro_desc:outDesc};
+      emCaixa=pix+deb+cartao+parc+din+out;
+      pgtoDetalhes={pix,debito:deb,cartao,parcelado:parc,parcelas:nparc,dinheiro:din,reserva:0,outro:out,outro_desc:outDesc};
     }
+  } else if(forma==='Parcelado'){
+    var nparcelas=parseInt(document.getElementById('cxv-parcelas')?.value)||2;
+    pgtoDetalhes={parcelas:nparcelas,valor_parcela:val/nparcelas};
+    emCaixa=val;
   } else if(forma==='Reserva'){
     reserva=parseFloat(document.getElementById('cxv-reserva-val')?.value)||0;
     if(reserva>0&&cid){
@@ -8156,9 +8219,12 @@ function selecionarProdutoVenda(){
 function selecionarFormaPgto(forma){
   var cid=parseInt(document.getElementById('vd-cl')?.value)||0;
   var saldoReserva=calcSaldoCliente(cid);
+  var total=parseFloat(document.getElementById('vd-total')?.value)||0;
+  var pct=(DB.params_reserva&&DB.params_reserva.limite_uso_pct)||40;
+  var limR=calcLimiteReserva(total,saldoReserva);
   if(forma==='Reserva'&&saldoReserva<=0){showToast('Cliente sem saldo de Reserva','danger');return;}
   document.getElementById('vd-forma').value=forma;
-  ['pix','cartão','dinheiro','reserva','misto'].forEach(function(f){
+  ['pix','débito','cartão','parcelado','dinheiro','reserva','misto'].forEach(function(f){
     var btn=document.getElementById('vd-btn-'+f);if(!btn)return;
     var sel=(f===forma.toLowerCase());
     btn.style.background=sel?'var(--ouro)':'var(--fundo-input)';
@@ -8167,28 +8233,53 @@ function selecionarFormaPgto(forma){
   });
   atualizarBotoesReserva('vd-btn-reserva',saldoReserva,'vd-forma');
   var detalhe=document.getElementById('vd-pgto-detalhe');if(!detalhe)return;
+
+  var inp=function(id,lbl,extra){
+    return '<div class="form-group"><label style="font-size:12px;color:var(--texto-suave)">'+lbl+'</label>'
+      +'<input id="'+id+'" type="number" step="10" value="0" min="0" oninput="calcVenda()" '+(extra||'')
+      +' style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right"></div>';
+  };
+
   if(forma==='Misto'){
-    detalhe.innerHTML='<p style="font-size:12px;color:var(--texto-suave);margin-bottom:10px">Informe quanto foi pago em cada modalidade:</p>'
+    var limInfo=saldoReserva>0
+      ?'<span style="color:var(--verde)"> · Saldo: '+fmt(saldoReserva)+'</span><span style="color:var(--ouro);font-weight:600"> · Máx '+pct+'%: '+fmt(limR)+'</span>'
+      :'<span style="color:#eb5757"> · Sem saldo</span>';
+    detalhe.innerHTML=
+       '<p style="font-size:12px;color:var(--texto-suave);margin-bottom:12px">Distribua o pagamento entre as modalidades — a soma deve fechar o valor total.</p>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
-      +[['PIX','mx-pix'],['Cartão','mx-cartao'],['Dinheiro','mx-dinheiro']].map(function(it){
-        return '<div class="form-group"><label style="font-size:12px">'+it[0]+' (R$)</label>'
-          +'<input id="'+it[1]+'" type="number" step="10" value="0" min="0" oninput="calcVenda()" style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right"></div>';
-      }).join('')
-      +'<div class="form-group"><label style="font-size:12px">Crédito Reserva (R$)'+(saldoReserva>0?'<span style="color:var(--verde)"> · Saldo: '+fmt(saldoReserva)+'</span>':'<span style="color:#eb5757"> · Sem saldo</span>')+'</label>'
-      +'<input id="mx-reserva" type="number" step="10" value="0" min="0" max="'+calcLimiteReserva(parseFloat(document.getElementById('vd-total')?.value)||0,saldoReserva).toFixed(2)+'" oninput="calcVenda()"'+(saldoReserva<=0?' disabled':'')+' style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:'+(saldoReserva<=0?'#eee':'var(--fundo-input)')+';font-family:Jost,sans-serif;text-align:right'+(saldoReserva<=0?';opacity:.5':'')+'"></div>'
-      +(saldoReserva>0?'<div style="font-size:10px;color:var(--texto-suave);grid-column:2">Limite '+(DB.params_reserva&&DB.params_reserva.limite_uso_pct||40)+'% = '+fmt(calcLimiteReserva(parseFloat(document.getElementById('vd-total')?.value)||0,saldoReserva))+'</div>':'')
-      +'<div class="form-group"><label style="font-size:12px">Outro (R$)</label>'
-      +'<input id="mx-outro" type="number" step="10" value="0" min="0" oninput="calcVenda()" style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right"></div>'
-      +'<div class="form-group"><label style="font-size:12px">Descrição do outro</label>'
-      +'<input id="mx-outro-desc" placeholder="Ex: Cheque, TED…" style="width:100%;padding:8px 10px;font-size:14px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif"></div>'
+      +inp('mx-pix','PIX (R$)')
+      +inp('mx-debito','Débito (R$)')
+      +inp('mx-cartao','Cartão à Vista (R$)')
+      +'<div class="form-group"><label style="font-size:12px;color:var(--texto-suave)">Parcelado (R$)</label>'
+        +'<input id="mx-parcelado" type="number" step="10" value="0" min="0" oninput="calcVenda()" style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
+        +'<select id="mx-parcelas" style="width:100%;margin-top:5px;padding:6px 8px;font-size:13px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
+        +[2,3,4,5,6,7,8,9,10,12].map(function(n){return '<option value="'+n+'">'+n+'× sem juros</option>';}).join('')
+        +'</select></div>'
+      +inp('mx-dinheiro','Dinheiro (R$)')
+      +'<div class="form-group"><label style="font-size:12px;color:var(--texto-suave)">Reserva (R$)'+limInfo+'</label>'
+        +'<input id="mx-reserva" type="number" step="10" value="0" min="0" max="'+limR.toFixed(2)+'" oninput="calcVenda()"'+(saldoReserva<=0?' disabled':'')
+        +' style="width:100%;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:'+(saldoReserva<=0?'#f5f5f5':'var(--fundo-input)')+';font-family:Jost,sans-serif;text-align:right'+(saldoReserva<=0?';opacity:.5':'')+'"></div>'
+      +'<div class="form-group" style="grid-column:1/-1"><label style="font-size:12px;color:var(--texto-suave)">Outro (R$)</label>'
+        +'<div style="display:flex;gap:6px">'
+        +'<input id="mx-outro" type="number" step="10" value="0" min="0" oninput="calcVenda()" style="width:100px;padding:8px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
+        +'<input id="mx-outro-desc" placeholder="Cheque, TED, Transferência…" style="flex:1;padding:8px 10px;font-size:13px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
+        +'</div></div>'
       +'</div>';
+  } else if(forma==='Parcelado'){
+    detalhe.innerHTML='<div class="form-grid" style="gap:10px">'
+      +'<div class="form-group"><label style="font-size:12px;color:var(--texto-suave)">Número de parcelas</label>'
+        +'<select id="vd-parcelas" style="width:100%;padding:9px 10px;font-size:15px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif">'
+        +[2,3,4,5,6,7,8,9,10,12].map(function(n){return '<option value="'+n+'">'+n+'× sem juros</option>';}).join('')
+        +'</select></div>'
+      +'<div class="form-group"><label style="font-size:12px;color:var(--texto-suave)">Valor da parcela (auto)</label>'
+        +'<input id="vd-parcela-val" type="text" readonly style="width:100%;padding:9px 10px;font-size:15px;font-weight:700;border:1.5px solid #C4BDB4;border-radius:5px;background:#f5f5f5;font-family:Jost,sans-serif;text-align:right">'
+        +'</div></div>';
+    document.getElementById('vd-parcelas')?.addEventListener('change',calcVenda);
   } else if(forma==='Reserva'){
-    var limR=calcLimiteReserva(parseFloat(document.getElementById('vd-total')?.value)||0,saldoReserva);
-    var pct=(DB.params_reserva&&DB.params_reserva.limite_uso_pct)||40;
-    detalhe.innerHTML='<div class="form-group"><label style="font-size:12px">Crédito Reserva (R$)'
+    detalhe.innerHTML='<div class="form-group"><label style="font-size:12px;color:var(--texto-suave)">Crédito Reserva (R$)'
       +(saldoReserva>0?'<span style="color:var(--verde)"> · Saldo: '+fmt(saldoReserva)+'</span><span style="color:var(--ouro);font-weight:600"> · Limite '+pct+'%: '+fmt(limR)+'</span>':'')+'</label>'
-      +'<input id="vd-reserva" type="number" step="10" value="'+limR.toFixed(2)+'" min="0" max="'+limR+'" oninput="calcVenda()" style="width:100%;padding:9px 10px;font-size:16px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
-      +'<p style="font-size:11px;color:var(--texto-suave);margin-top:4px">Máximo '+pct+'% do valor = '+fmt(limR)+'</p></div>';
+      +'<input id="vd-reserva" type="number" step="10" value="'+limR.toFixed(2)+'" min="0" max="'+limR.toFixed(2)+'" oninput="calcVenda()" style="width:100%;padding:9px 10px;font-size:16px;border:1.5px solid #C4BDB4;border-radius:5px;background:var(--fundo-input);font-family:Jost,sans-serif;text-align:right">'
+      +'<p style="font-size:11px;color:var(--texto-suave);margin-top:4px">Limite: '+pct+'% do valor = '+fmt(limR)+'</p></div>';
   } else {detalhe.innerHTML='';}
   calcVenda();
 }
