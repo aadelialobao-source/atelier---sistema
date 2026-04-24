@@ -904,31 +904,58 @@ async function syncFromSupabase(silent){
     if(!r.ok){const t=await r.text();throw new Error('GET: '+r.status+' '+t);}
     const data=await r.json();
 
-    // Tabela vazia = projeto novo = conexão OK
+    // Tabela vazia = projeto novo = sobe dados locais
     if(!data||!data.length){
       _sbLastSync=new Date();
       _sbUpdateIndicator('ok');
+      await syncToSupabase();
       return true;
     }
 
     let dbUpdated=false;
     data.forEach(row=>{
       if(row.key==='database'&&row.payload){
-        const snap=row.payload;
-        DB_KEYS.forEach(k=>{if(Array.isArray(snap[k]))DB[k]=snap[k];});
+        const remote=row.payload;
+
+        // MERGE: para cada array, une local + remoto por ID (sem duplicatas)
+        // Prevalece o registro com maior ID (mais recente)
+        DB_KEYS.forEach(k=>{
+          if(!Array.isArray(remote[k]))return;
+          const local=DB[k]||[];
+          // Mapa de todos os IDs remotos
+          const remoteMap={};
+          remote[k].forEach(function(item){if(item&&item.id!=null)remoteMap[item.id]=item;});
+          // Adiciona itens locais que não existem no remoto (novos criados offline)
+          local.forEach(function(item){
+            if(item&&item.id!=null&&!remoteMap[item.id]){
+              remoteMap[item.id]=item;
+            }
+          });
+          // Reconstrói array ordenado por ID
+          DB[k]=Object.values(remoteMap).sort(function(a,b){return (a.id||0)-(b.id||0);});
+        });
+
+        // Merge de objetos (params, caixa etc): remote prevalece, mas preserva chaves locais ausentes
         DB_OBJ_KEYS.forEach(k=>{
-          if(snap[k]&&typeof snap[k]==='object'&&!Array.isArray(snap[k])){
-            Object.assign(DB[k],snap[k]);
+          if(remote[k]&&typeof remote[k]==='object'&&!Array.isArray(remote[k])){
+            // Preserva dados locais não presentes no remoto
+            DB[k]=Object.assign({},DB[k],remote[k]);
             if(k==='caixa'){
-              if(Array.isArray(snap[k].movimentos))DB[k].movimentos=snap[k].movimentos;
-              if(Array.isArray(snap[k].fechamentos))DB[k].fechamentos=snap[k].fechamentos;
+              if(Array.isArray(remote[k].movimentos))DB[k].movimentos=remote[k].movimentos;
+              if(Array.isArray(remote[k].fechamentos))DB[k].fechamentos=remote[k].fechamentos;
             }
           }
         });
-        if(snap._ids)Object.keys(snap._ids).forEach(k=>{DB._ids[k]=snap._ids[k];});
-        const snapStr=JSON.stringify(snap);
+
+        // Merge de _ids: pega o maior de cada contador
+        if(remote._ids){
+          Object.keys(remote._ids).forEach(function(k){
+            DB._ids[k]=Math.max(DB._ids[k]||0, remote._ids[k]||0);
+          });
+        }
+
+        const snapStr=JSON.stringify(DB);
         localStorage.setItem('atelier_db_v2',snapStr);
-        // Atualiza hash de integridade para evitar falso alarme
         _dbHash(snapStr).then(h=>localStorage.setItem('atelier_db_integrity',h)).catch(()=>{});
         dbUpdated=true;
       }
@@ -945,6 +972,10 @@ async function syncFromSupabase(silent){
 
     _sbLastSync=new Date();
     _sbUpdateIndicator('ok');
+
+    // Após merge, sobe o resultado consolidado para o Supabase
+    if(dbUpdated) await syncToSupabase();
+
     if(dbUpdated&&!silent){
       if(CUR_MOD&&typeof renderModule==='function')renderModule(CUR_MOD);
     }
@@ -5694,9 +5725,40 @@ function gerarReciboOuro(entradaId){
 
 </div></body></html>`;
 
-  const w=window.open('','_blank','width=600,height=800');
-  if(w){w.document.write(html);w.document.close();}
-  else{showToast('Permita pop-ups para imprimir o recibo','warn');}
+  // Exibe como modal na página — Safari bloqueia window.open
+  var overlay=document.createElement('div');
+  overlay.id='recibo-ouro-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.7);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px';
+  var container=document.createElement('div');
+  container.style.cssText='background:#fff;border-radius:8px;max-width:480px;width:100%;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.4)';
+  // Botões de ação fora do recibo (não aparecem na impressão)
+  var actions=document.createElement('div');
+  actions.className='no-print';
+  actions.style.cssText='display:flex;gap:10px;padding:14px 16px;border-bottom:1px solid #eee;justify-content:space-between;align-items:center';
+  actions.innerHTML='<span style="font-family:Georgia,serif;font-size:13px;color:#0D1F2D;letter-spacing:1px">RECIBO DE OURO</span>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="window.print()" style="background:#0D1F2D;color:#B08E56;border:none;padding:8px 18px;border-radius:5px;font-size:13px;cursor:pointer;font-family:Georgia,serif">🖨 Imprimir</button>'
+    +'<button onclick="document.getElementById(\'recibo-ouro-overlay\').remove()" style="background:#eee;color:#333;border:none;padding:8px 14px;border-radius:5px;font-size:13px;cursor:pointer">✕ Fechar</button>'
+    +'</div>';
+  // Conteúdo do recibo
+  var content=document.createElement('div');
+  content.innerHTML=html.replace('<!DOCTYPE html><html lang="pt-BR"><head>','<style-replaced>').split('</style>')[1]||'';
+  // Extrai só o body do html
+  var bodyMatch=html.match(/<body>([\s\S]*)<\/body>/);
+  content.innerHTML=bodyMatch?bodyMatch[1]:'';
+  // Adiciona o style ao head da página
+  var styleMatch=html.match(/<style>([\s\S]*?)<\/style>/);
+  if(styleMatch){
+    var s=document.createElement('style');
+    s.id='recibo-ouro-style';
+    s.textContent=styleMatch[1]+'\n.no-print{display:flex!important}\n@media print{.no-print{display:none!important}#recibo-ouro-overlay{position:static!important;background:none!important;padding:0!important;display:block!important}}';
+    document.head.appendChild(s);
+  }
+  container.appendChild(actions);
+  container.appendChild(content);
+  overlay.appendChild(container);
+  document.body.appendChild(overlay);
+  overlay.scrollTop=0;
 }
 
 // ═══════════════════════════════════════════════════════════════════
