@@ -1550,13 +1550,20 @@ function initApp(){
   document.getElementById('topbar-user').textContent=u?u.nome:'';
   buildNav();
   navTo('dashboard');
+  // Inicia sincronização Supabase se configurado
+  if(_sbConfig()){
+    syncFromSupabase(true).then(function(ok){
+      if(ok) syncToSupabase();
+    });
+    _sbStartPolling();
+  }
   // Auto-atualiza cotação se nunca buscou ou se passou do dia
   const tsKey='atelier_cotacao_ts';
   try{
     const last=localStorage.getItem(tsKey);
     const hoje=today();
     if(!last||last<hoje){
-      setTimeout(function(){buscarCotacaoOuro(false);},2000); // busca silenciosa ao iniciar
+      setTimeout(function(){buscarCotacaoOuro(false);},2000);
     }
   }catch(e){}
 }
